@@ -494,18 +494,7 @@ export default function Home() {
             Smart AI learning platform
           </p>
         </div>
-
-        {/* NEW CHAT */}
-        <div className="p-4">
-          <button
-            onClick={createNewChat}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-4 font-semibold transition-all shadow-xl hover:scale-[1.02]"
-          >
-            <Plus size={20} />
-            New Chat
-          </button>
-        </div>
-       {/* AUTH */}
+{/* AUTH */}
 <div className="px-4 pb-4">
   {!isSignedIn ? (
     <div
@@ -519,7 +508,7 @@ export default function Home() {
       <div className="absolute inset-0 bg-linear-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10 animate-pulse" />
 
       <div className="relative z-10">
-        <h2 className="text-lg font-bold">
+        <h2 className="text-md font-bold">
           Welcome Back ✨
         </h2>
 
@@ -570,6 +559,17 @@ export default function Home() {
     </div>
   )}
 </div>
+        {/* NEW CHAT */}
+        <div className="p-4">
+          <button
+            onClick={createNewChat}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-4 font-semibold transition-all shadow-xl hover:scale-[1.02]"
+          >
+            <Plus size={20} />
+            New Chat
+          </button>
+        </div>
+       
 
         {/* CHAT HISTORY */}
         <div className="flex-1 overflow-y-auto px-4 space-y-3">
