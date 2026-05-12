@@ -1,5 +1,9 @@
 "use client";
-
+import {
+  SignInButton,
+  UserButton,
+  useUser,
+} from "@clerk/nextjs";
 import {
   useState,
   useEffect,
@@ -37,6 +41,7 @@ type Chat = {
 };
 
 export default function Home() {
+  const { isSignedIn } = useUser();
   // STARTER MESSAGE
   const starterMessages: Message[] = [
     {
@@ -500,6 +505,71 @@ export default function Home() {
             New Chat
           </button>
         </div>
+       {/* AUTH */}
+<div className="px-4 pb-4">
+  {!isSignedIn ? (
+    <div
+      className={`relative overflow-hidden rounded-3xl border p-5 transition-all ${
+        darkMode
+          ? "bg-white/5 border-white/10 backdrop-blur-2xl"
+          : "bg-white/70 border-white/40 backdrop-blur-2xl shadow-xl"
+      }`}
+    >
+      {/* Glow */}
+      <div className="absolute inset-0 bg-linear-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10 animate-pulse" />
+
+      <div className="relative z-10">
+        <h2 className="text-lg font-bold">
+          Welcome Back ✨
+        </h2>
+
+        <p
+          className={`text-sm mt-1 ${
+            darkMode
+              ? "text-gray-400"
+              : "text-gray-600"
+          }`}
+        >
+          Sign in to sync chats and unlock your AI workspace.
+        </p>
+
+        <SignInButton mode="modal">
+          <button className="mt-4 w-full rounded-2xl bg-linear-to-r from-blue-600 via-purple-600 to-cyan-500 px-4 py-3 font-semibold text-white shadow-2xl transition-all hover:scale-[1.03] hover:shadow-blue-500/30">
+            🚀 Continue with Clerk
+          </button>
+        </SignInButton>
+      </div>
+    </div>
+  ) : (
+    <div
+      className={`rounded-3xl border p-4 flex items-center justify-between transition-all ${
+        darkMode
+          ? "bg-white/5 border-white/10 backdrop-blur-2xl"
+          : "bg-white/70 border-white/40 backdrop-blur-2xl shadow-xl"
+      }`}
+    >
+      <div>
+        <h2 className="font-semibold">
+          You’re signed in ✨
+        </h2>
+
+        <p
+          className={`text-sm ${
+            darkMode
+              ? "text-gray-400"
+              : "text-gray-600"
+          }`}
+        >
+          Your chats are now personalized
+        </p>
+      </div>
+
+      <div className="scale-110">
+        <UserButton />
+      </div>
+    </div>
+  )}
+</div>
 
         {/* CHAT HISTORY */}
         <div className="flex-1 overflow-y-auto px-4 space-y-3">
@@ -721,12 +791,11 @@ export default function Home() {
                     : "bg-white border border-gray-200 text-black"
                 }`}
               >
-                <ChatBubble
-                  role={msg.role}
-                  content={
-                    msg.content
-                  }
-                />
+               <ChatBubble
+  role={msg.role}
+  content={msg.content}
+  darkMode={darkMode}
+/>
               </div>
             )
           )}
