@@ -553,7 +553,13 @@ export default function Home() {
                 </button>
                 {/* ARCHIVED CHATS */}
 <div className="px-4 pb-4">
-  <h2 className="text-xs uppercase text-gray-400 mb-3">
+  <h2
+    className={`text-xs uppercase mb-3 ${
+      darkMode
+        ? "text-gray-400"
+        : "text-gray-600"
+    }`}
+  >
     Archived
   </h2>
 
@@ -561,25 +567,53 @@ export default function Home() {
     {chats
       .filter((chat) => chat.archived)
       .map((chat) => (
-        <button
+        <div
           key={chat.id}
-          onClick={() =>
-            setActiveChatId(chat.id)
-          }
-          className={`w-full text-left rounded-2xl px-4 py-4 transition-all ${
+          className={`rounded-2xl p-3 transition-all ${
             darkMode
-              ? "bg-white/5 hover:bg-white/10 text-gray-300"
-              : "bg-white/70 hover:bg-white text-gray-800 shadow-md"
+              ? "bg-white/5"
+              : "bg-white/70 shadow-md"
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Archive size={16} />
+          {/* CHAT BUTTON */}
+          <button
+            onClick={() =>
+              setActiveChatId(chat.id)
+            }
+            className="w-full text-left"
+          >
+            <div className="flex items-center gap-2">
+              <Archive size={16} />
 
-            <span className="truncate">
-              {chat.title}
-            </span>
+              <span className="truncate">
+                {chat.title}
+              </span>
+            </div>
+          </button>
+
+          {/* ACTIONS */}
+          <div className="flex gap-2 mt-3">
+            {/* RESTORE */}
+            <button
+              onClick={() =>
+                archiveChat(chat.id)
+              }
+              className="p-2 rounded-lg hover:bg-white/10"
+            >
+              <Archive size={14} />
+            </button>
+
+            {/* DELETE */}
+            <button
+              onClick={() =>
+                deleteChat(chat.id)
+              }
+              className="p-2 rounded-lg hover:bg-red-500/20"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
-        </button>
+        </div>
       ))}
   </div>
 </div>
