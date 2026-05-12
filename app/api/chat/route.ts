@@ -51,28 +51,39 @@ const uploadedImage =
       }
     }
 
-   if (uploadedImage) {
+   if (
+  uploadedImage &&
+  uploadedImage.size > 0
+) {
       const bytes = await uploadedImage.arrayBuffer();
 
       const base64Image = Buffer.from(bytes).toString(
         "base64"
       );
 
-      const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash-latest",
-      });
+     const model = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+});
 
-      const result = await model.generateContent([
+const result = await model.generateContent({
+  contents: [
+    {
+      role: "user",
+      parts: [
         {
-          inlineData: {
-            data: base64Image,
-          mimeType: uploadedImage.type,
-          },
+          text: "Analyze this image and help the student understand it.",
         },
 
-        `Analyze this image and help the student understand it.`,
-      ]);
-
+        {
+          inlineData: {
+            mimeType: uploadedImage.type,
+            data: base64Image,
+          },
+        },
+      ],
+    },
+  ],
+});
       const response = result.response.text();
 
       return Response.json({
@@ -123,10 +134,11 @@ GENERAL RULES:
     });
 
   } catch (error) {
-    console.error(error);
+   console.error(error);
 
-    return Response.json({
-      reply: "Something went wrong 😢",
-    });
+return Response.json({
+  reply:
+    "⚠️ Image analysis is temporarily unavailable due to API quota limits. Normal chat still works.",
+});
   }
 }
