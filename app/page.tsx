@@ -464,13 +464,13 @@ const [sidebarOpen, setSidebarOpen] =
   };
 
   return (
-   <main
+  <main
   className={`relative flex h-screen overflow-hidden transition-all duration-500 ${
-        darkMode
-          ? "bg-black text-white"
-          : "bg-[#eef2ff] text-black"
-      }`}
-    >
+    darkMode
+      ? "bg-transparent text-white"
+      : "bg-[#eef2ff] text-black"
+  }`}
+>
       <AnimatedBackground />
 
       {/* SIDEBAR */}
@@ -546,7 +546,7 @@ const [sidebarOpen, setSidebarOpen] =
     >
       <div>
         <h2 className="font-semibold">
-          You’re signed in ✨
+          You're signed in ✨
         </h2>
 
         <p
@@ -595,7 +595,7 @@ const [sidebarOpen, setSidebarOpen] =
             .map((chat) => (
               <div
                 key={chat.id}
-                className={`rounded-2xl p-3 transition-all ${
+                className={`rounded-2xl mt-5 p-3 transition-all ${
                   activeChatId ===
                   chat.id
                     ? darkMode
@@ -824,126 +824,126 @@ const [sidebarOpen, setSidebarOpen] =
           <div ref={bottomRef} />
         </div>
 
-        {/* INPUT AREA */}
-        <div
-          className={`p-5 border-t transition-all duration-500 ${
-            darkMode
-              ? "border-white/10 bg-black/50 backdrop-blur-2xl"
-              : "border-white/50 bg-white/70 backdrop-blur-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]"
+       {/* INPUT AREA */}
+<div
+  className={`p-3 border-t transition-all duration-500 ${
+    darkMode
+      ? "border-white/10 bg-black/40 backdrop-blur-2xl"
+      : "border-white/50 bg-white/70 backdrop-blur-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]"
+  }`}
+>
+  {/* MODES */}
+  <div className="flex gap-2 mb-3 mt-3 max-w-3xl mx-auto flex-wrap">
+    {["quick", "deep", "research"].map(
+      (item) => (
+        <button
+          key={item}
+          onClick={() =>
+            setMode(item)
+          }
+          className={`px-3 py-2 rounded-xl text-sm font-medium transition-all shadow-lg ${
+            mode === item
+              ? item ===
+                "quick"
+                ? "bg-blue-600 text-white scale-105"
+                : item ===
+                  "deep"
+                ? "bg-purple-600 text-white scale-105"
+                : "bg-green-600 text-white scale-105"
+              : darkMode
+              ? "bg-white/10 hover:bg-white/20"
+              : "bg-white hover:shadow-lg border border-gray-200"
           }`}
         >
-          {/* MODES */}
-          <div className="flex gap-3 mb-5 max-w-5xl mx-auto flex-wrap">
-            {["quick", "deep", "research"].map(
-              (item) => (
-                <button
-                  key={item}
-                  onClick={() =>
-                    setMode(item)
-                  }
-                  className={`px-5 py-3 rounded-2xl font-medium transition-all shadow-xl ${
-                    mode === item
-                      ? item ===
-                        "quick"
-                        ? "bg-blue-600 text-white scale-105"
-                        : item ===
-                          "deep"
-                        ? "bg-purple-600 text-white scale-105"
-                        : "bg-green-600 text-white scale-105"
-                      : darkMode
-                      ? "bg-white/10 hover:bg-white/20"
-                      : "bg-white hover:shadow-lg border border-gray-200"
-                  }`}
-                >
-                  {item ===
-                    "quick" &&
-                    "⚡ Quick"}
+          {item ===
+            "quick" &&
+            "⚡ Quick"}
 
-                  {item ===
-                    "deep" &&
-                    "🧠 Deep"}
+          {item ===
+            "deep" &&
+            "🧠 Deep"}
 
-                  {item ===
-                    "research" &&
-                    "🌐 Research"}
-                </button>
-              )
-            )}
+          {item ===
+            "research" &&
+            "🌐 Research"}
+        </button>
+      )
+    )}
 
-            {/* IMAGE */}
-            <label
-              className={`cursor-pointer rounded-2xl px-5 flex items-center justify-center transition-all shadow-xl ${
-                darkMode
-                  ? "bg-white/10 hover:bg-white/20"
-                  : "bg-white border border-gray-200 hover:shadow-lg"
-              }`}
-            >
-              <ImagePlus />
+    {/* IMAGE */}
+    <label
+      className={`cursor-pointer rounded-xl px-3 py-2 flex items-center justify-center transition-all shadow-lg ${
+        darkMode
+          ? "bg-white/10 hover:bg-white/20"
+          : "bg-white border border-gray-200 hover:shadow-lg"
+      }`}
+    >
+      <ImagePlus size={18} />
 
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => {
-                  if (
-                    e.target
-                      .files?.[0]
-                  ) {
-                    setImage(
-                      e.target
-                        .files[0]
-                    );
-                  }
-                }}
-              />
-            </label>
+      <input
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          if (
+            e.target
+              .files?.[0]
+          ) {
+            setImage(
+              e.target
+                .files[0]
+            );
+          }
+        }}
+      />
+    </label>
 
-            {image && (
-              <div
-                className={`flex items-center text-sm px-4 rounded-2xl ${
-                  darkMode
-                    ? "text-gray-300"
-                    : "text-gray-700"
-                }`}
-              >
-                📷 {image.name}
-              </div>
-            )}
-          </div>
+    {image && (
+      <div
+        className={`flex items-center text-xs px-3 rounded-xl ${
+          darkMode
+            ? "text-gray-300"
+            : "text-gray-700"
+        }`}
+      >
+        📷 {image.name}
+      </div>
+    )}
+  </div>
 
-          {/* INPUT */}
-          <div className="flex gap-3 max-w-5xl mx-auto">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) =>
-                setInput(
-                  e.target.value
-                )
-              }
-              placeholder="Ask anything..."
-              className={`flex-1 rounded-3xl px-6 py-5 outline-none transition-all ${
-                darkMode
-                  ? "bg-white/10 border border-white/10 text-white placeholder:text-gray-400 focus:border-blue-500"
-                  : "bg-white border border-gray-300 text-black placeholder:text-gray-500 shadow-lg focus:border-blue-500"
-              }`}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter"
-                ) {
-                  sendMessage();
-                }
-              }}
-            />
+  {/* INPUT */}
+  <div className="flex gap-2 max-w-3xl mx-auto">
+    <input
+      type="text"
+      value={input}
+      onChange={(e) =>
+        setInput(
+          e.target.value
+        )
+      }
+      placeholder="Ask anything..."
+      className={`flex-1 rounded-2xl px-4 py-3 outline-none transition-all ${
+        darkMode
+          ? "bg-white/10 border border-white/10 text-white placeholder:text-gray-400 focus:border-blue-500 focus:shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+          : "bg-white border border-gray-300 text-black placeholder:text-gray-500 shadow-lg focus:border-blue-500"
+      }`}
+      onKeyDown={(e) => {
+        if (
+          e.key === "Enter"
+        ) {
+          sendMessage();
+        }
+      }}
+    />
 
-            <button
-              onClick={sendMessage}
-              className="rounded-3xl bg-blue-600 hover:bg-blue-700 px-6 transition-all shadow-2xl hover:scale-105"
-            >
-              <Send />
-            </button>
-          </div>
-        </div>
+    <button
+      onClick={sendMessage}
+      className="rounded-2xl bg-blue-600 hover:bg-blue-700 px-5 transition-all shadow-2xl hover:scale-105"
+    >
+      <Send size={18} />
+    </button>
+  </div>
+</div>
       </section>
     </main>
   );
