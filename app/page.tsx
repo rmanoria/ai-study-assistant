@@ -785,7 +785,7 @@ const [sidebarOpen, setSidebarOpen] =
     onClick={() =>
       setSidebarOpen(!sidebarOpen)
     }
-    className="p-3 mt-5 rounded-xl bg-white/10"
+    className="p-3 mt-5 flex justify-end rounded-xl bg-white/10"
   >
     <Menu size={30} />
   </button>
