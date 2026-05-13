@@ -468,10 +468,29 @@ const [sidebarOpen, setSidebarOpen] =
   className={`relative flex h-screen overflow-hidden transition-all duration-500 ${
     darkMode
       ? "bg-transparent text-white"
-      : "bg-[#eef2ff] text-black"
+      : "bg-[radial-gradient(circle_at_top,#dbeafe_0%,#eef2ff_35%,#f8fafc_70%,#ffffff_100%)] text-black"
   }`}
 >
       <AnimatedBackground />
+     {!darkMode && (
+  <>
+    {/* TOP LEFT GLOW */}
+    <div className="pointer-events-none absolute -top-20 -left-20 h-105 w-105 rounded-full bg-blue-500/35 blur-[120px] animate-pulse" />
+
+    {/* BOTTOM RIGHT GLOW */}
+    <div className="pointer-events-none absolute -bottom-20 -right-20 h-105 w-105 rounded-full bg-purple-500/30 blur-[120px] animate-pulse" />
+
+    {/* CENTER CYAN AURA */}
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div className="h-80 w-[320px] rounded-full bg-cyan-400/20 blur-[100px] animate-pulse" />
+    </div>
+
+    {/* EXTRA FLOATING LIGHT */}
+    <div className="pointer-events-none absolute top-[20%] right-[20%] h-45 w-45 rounded-full bg-pink-300/20 blur-[80px] animate-pulse" />
+
+    <div className="pointer-events-none absolute bottom-[20%] left-[15%] h-50 w-50 rounded-full bg-sky-300/20 blur-[90px] animate-pulse" />
+  </>
+)}
 
       {/* SIDEBAR */}
      <aside
@@ -566,6 +585,31 @@ const [sidebarOpen, setSidebarOpen] =
     </div>
   )}
 </div>
+{!darkMode && (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="absolute -top-50 -left-50 h-125 w-125 rounded-full bg-blue-400/40 blur-3xl animate-pulse" />
+
+    <div className="absolute -bottom-50 -right-50 h-125 w-125 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
+
+    <div className="absolute top-[30%] left-[40%] h-87.5 w-87.5 rounded-full bg-cyan-300/30 blur-3xl animate-pulse" />
+
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.7),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.15),transparent_40%)]" />
+
+    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-size-[40px_40px]" />
+  </div>
+)}
+{!darkMode && (
+  <div
+    className="pointer-events-none absolute inset-0 opacity-[0.05]"
+    style={{
+      backgroundImage: `
+        linear-gradient(to right, rgba(59,130,246,0.15) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(59,130,246,0.15) 1px, transparent 1px)
+      `,
+      backgroundSize: "60px 60px",
+    }}
+  />
+)}
         {/* NEW CHAT */}
         <div className="p-4">
           <button
@@ -779,7 +823,7 @@ const [sidebarOpen, setSidebarOpen] =
       </aside>
 
       {/* MAIN */}
-      <section className="flex-1 flex flex-col">
+     <section className="flex flex-1 flex-col overflow-hidden">
         <div className="md:hidden p-4">
   <button
     onClick={() =>
@@ -787,19 +831,20 @@ const [sidebarOpen, setSidebarOpen] =
     }
     className="absolute top-0 right-0 m-4 p-3 rounded-xl bg-white/10"
   >
-    <Menu size={30} />
+    <Menu size={22} />
   </button>
 </div>
         {/* CHAT AREA */}
-        <div
-          ref={chatContainerRef}
-          className="flex-1 overflow-y-auto p-6 space-y-6"
-        >
+      <div
+  ref={chatContainerRef}
+  className="flex-1 overflow-y-auto p-6 space-y-6"
+>
+        
           {messages.map(
             (msg, index) => (
               <div
                 key={index}
-                className={`max-w-[85%] rounded-3xl p-5 transition-all shadow-xl ${
+                className={`max-w-[85%] rounded-3xl p-5 transition-all duration-500 hover:scale-[1.01] hover:-translate-y-1 shadow-xl ${
                   msg.role ===
                   "user"
                     ? "bg-blue-600 text-white ml-auto"
@@ -823,13 +868,27 @@ const [sidebarOpen, setSidebarOpen] =
 
           <div ref={bottomRef} />
         </div>
+{/* LIGHT MODE FUTURISTIC EFFECTS */}
+{!darkMode && (
+  <>
+    {/* Animated gradient sweep */}
+    <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(59,130,246,0.08),rgba(168,85,247,0.08),rgba(34,211,238,0.08))] bg-size-[200%_200%] animate-[gradientMove_8s_ease_infinite]" />
 
+    {/* Floating blur orbs */}
+    <div className="absolute -top-10 left-10 h-32 w-32 rounded-full bg-blue-400/30 blur-3xl animate-pulse" />
+
+    <div className="absolute bottom-0 right-10 h-40 w-40 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
+
+    {/* Mesh glow */}
+    <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
+  </>
+)}
        {/* INPUT AREA */}
 <div
-  className={`p-3 border-t transition-all duration-500 ${
+  className={`relative z-10 p-3 border-t transition-all duration-500 ${
     darkMode
       ? "border-white/10 bg-black/40 backdrop-blur-2xl"
-      : "border-white/50 bg-white/70 backdrop-blur-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]"
+      : "border-white/30 bg-white/40 backdrop-blur-3xl shadow-[0_-10px_60px_rgba(59,130,246,0.15)]"
   }`}
 >
   {/* MODES */}
@@ -938,7 +997,7 @@ const [sidebarOpen, setSidebarOpen] =
 
     <button
       onClick={sendMessage}
-      className="rounded-2xl bg-blue-600 hover:bg-blue-700 px-5 transition-all shadow-2xl hover:scale-105"
+      className="rounded-2xl bg-linear-to-r from-blue-600 via-cyan-500 to-purple-500 px-5 transition-all duration-300 shadow-[0_0_25px_rgba(59,130,246,0.4)] hover:scale-110 hover:rotate-3"
     >
       <Send size={18} />
     </button>
