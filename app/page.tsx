@@ -502,7 +502,7 @@ const [sidebarOpen, setSidebarOpen] =
           </p>
         </div>
 {/* AUTH */}
-<div className="px-4 pb-4">
+<div className="px-4 mt-2 pb-4">
   {!isSignedIn ? (
     <div
       className={`relative overflow-hidden rounded-3xl border p-5 transition-all ${
@@ -530,7 +530,7 @@ const [sidebarOpen, setSidebarOpen] =
         </p>
 
         <SignInButton mode="modal">
-          <button className="mt-4 w-full rounded-2xl bg-linear-to-r from-blue-600 via-purple-600 to-cyan-500 px-4 py-3 font-semibold text-white shadow-2xl transition-all hover:scale-[1.03] hover:shadow-blue-500/30">
+          <button className=" w-full rounded-2xl bg-linear-to-r from-blue-600 via-purple-600 to-cyan-500 px-4 py-3 font-semibold text-white shadow-2xl transition-all hover:scale-[1.03] hover:shadow-blue-500/30">
             🚀 Continue with Clerk
           </button>
         </SignInButton>
@@ -570,7 +570,7 @@ const [sidebarOpen, setSidebarOpen] =
         <div className="p-4">
           <button
             onClick={createNewChat}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-4 font-semibold transition-all shadow-xl hover:scale-[1.02]"
+            className="w-full -mt-6 flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-4 font-semibold transition-all shadow-xl hover:scale-[1.02]"
           >
             <Plus size={20} />
             New Chat
@@ -595,7 +595,7 @@ const [sidebarOpen, setSidebarOpen] =
             .map((chat) => (
               <div
                 key={chat.id}
-                className={`rounded-2xl mt-5 p-3 transition-all ${
+                className={`rounded-2xl mt-1 p-3 transition-all ${
                   activeChatId ===
                   chat.id
                     ? darkMode
@@ -785,9 +785,9 @@ const [sidebarOpen, setSidebarOpen] =
     onClick={() =>
       setSidebarOpen(!sidebarOpen)
     }
-    className="p-3 rounded-xl bg-white/10"
+    className="p-3 mt-5 rounded-xl bg-white/10"
   >
-    <Menu size={24} />
+    <Menu size={30} />
   </button>
 </div>
         {/* CHAT AREA */}
