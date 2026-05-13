@@ -461,8 +461,8 @@ export default function Home() {
   };
 
   return (
-    <main
-      className={`relative flex h-screen overflow-hidden transition-all duration-500 ${
+   <main
+  className={`relative flex min-w-350 h-screen overflow-hidden transition-all duration-500 ${
         darkMode
           ? "bg-black text-white"
           : "bg-[#eef2ff] text-black"
@@ -472,7 +472,7 @@ export default function Home() {
 
       {/* SIDEBAR */}
       <aside
-        className={`hidden md:flex w-80 flex-col border-r transition-all duration-500 ${
+  className={`flex w-80 flex-col border-r transition-all duration-500 ${
           darkMode
             ? "border-white/10 bg-black/40 backdrop-blur-2xl"
             : "border-white/40 bg-white/60 backdrop-blur-2xl shadow-2xl"

@@ -35,13 +35,20 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html
-        lang="en"
-        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      >
-        <body className="min-h-full flex flex-col bg-black text-white">
-          {children}
-        </body>
-      </html>
+  lang="en"
+  className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+>
+  <head>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+  </head>
+
+  <body className="min-h-full flex flex-col bg-black text-white">
+    {children}
+  </body>
+</html>
     </ClerkProvider>
   );
 }
