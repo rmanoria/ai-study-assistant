@@ -1,3 +1,4 @@
+
 "use client";
 import {
   SignInButton,
@@ -24,6 +25,7 @@ import {
   Pin,
   Archive,
   Star,
+  Menu,
 } from "lucide-react";
 
 type Message = {
@@ -59,7 +61,8 @@ export default function Home() {
       messages: starterMessages,
     },
   ]);
-
+const [sidebarOpen, setSidebarOpen] =
+  useState(false);
   const [activeChatId, setActiveChatId] =
     useState(chats[0].id);
 
@@ -471,8 +474,12 @@ export default function Home() {
       <AnimatedBackground />
 
       {/* SIDEBAR */}
-      <aside
-  className={`flex w-72 md:w-80 flex-col border-r transition-all duration-500 ${
+     <aside
+  className={`fixed md:relative z-50 h-full w-80 flex flex-col border-r transition-all duration-300 ${
+    sidebarOpen
+      ? "translate-x-0"
+      : "-translate-x-full md:translate-x-0"
+  } ${
           darkMode
             ? "border-white/10 bg-black/40 backdrop-blur-2xl"
             : "border-white/40 bg-white/60 backdrop-blur-2xl shadow-2xl"
@@ -773,6 +780,16 @@ export default function Home() {
 
       {/* MAIN */}
       <section className="flex-1 flex flex-col">
+        <div className="md:hidden p-4">
+  <button
+    onClick={() =>
+      setSidebarOpen(!sidebarOpen)
+    }
+    className="p-3 rounded-xl bg-white/10"
+  >
+    <Menu size={24} />
+  </button>
+</div>
         {/* CHAT AREA */}
         <div
           ref={chatContainerRef}
