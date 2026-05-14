@@ -126,13 +126,17 @@ const [sidebarOpen, setSidebarOpen] =
   }, []);
 
   // AUTO SCROLL
-  useEffect(() => {
-    if (autoScroll) {
-      bottomRef.current?.scrollIntoView({
-        behavior: "smooth",
-      });
-    }
-  }, [messages, loading, autoScroll]);
+ useEffect(() => {
+  if (
+    autoScroll &&
+    chatContainerRef.current
+  ) {
+    chatContainerRef.current.scrollTo({
+      top: chatContainerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+}, [messages, loading, autoScroll]);
 
   // LOAD SAVED CHATS
   useEffect(() => {
@@ -823,13 +827,13 @@ const [sidebarOpen, setSidebarOpen] =
       </aside>
 
       {/* MAIN */}
-     <section className="flex flex-1 flex-col overflow-hidden">
+     <section className="relative flex flex-1 flex-col overflow-hidden bg-transparent">
         <div className="md:hidden p-4">
   <button
     onClick={() =>
       setSidebarOpen(!sidebarOpen)
     }
-    className="absolute top-0 right-0 m-4 p-3 rounded-xl bg-white/10"
+   className="absolute top-0 right-0 z-999 m-4 p-3 rounded-xl bg-white/70 backdrop-blur-xl shadow-lg"
   >
     <Menu size={22} />
   </button>
@@ -866,33 +870,27 @@ const [sidebarOpen, setSidebarOpen] =
             <TypingLoader />
           )}
 
-          <div ref={bottomRef} />
+          
         </div>
 {/* LIGHT MODE FUTURISTIC EFFECTS */}
 {!darkMode && (
   <>
     {/* Animated gradient sweep */}
-    <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(59,130,246,0.08),rgba(168,85,247,0.08),rgba(34,211,238,0.08))] bg-size-[200%_200%] animate-[gradientMove_8s_ease_infinite]" />
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(59,130,246,0.08),rgba(168,85,247,0.08),rgba(34,211,238,0.08))] bg-size-[200%_200%] animate-[gradientMove_8s_ease_infinite]" />
 
     {/* Floating blur orbs */}
-    <div className="absolute -top-10 left-10 h-32 w-32 rounded-full bg-blue-400/30 blur-3xl animate-pulse" />
+    <div className="pointer-events-none absolute -top-10 left-10 h-32 w-32 rounded-full bg-blue-400/30 blur-3xl animate-pulse" />
 
-    <div className="absolute bottom-0 right-10 h-40 w-40 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
+    <div className="pointer-events-none absolute bottom-0 right-10 h-40 w-40 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
 
     {/* Mesh glow */}
-    <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
+    <div className="pointer-events-none absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
   </>
 )}
-       {/* INPUT AREA */}
-<div
-  className={`relative z-10 p-3 border-t transition-all duration-500 ${
-    darkMode
-      ? "border-white/10 bg-black/40 backdrop-blur-2xl"
-      : "border-white/30 bg-white/40 backdrop-blur-3xl shadow-[0_-10px_60px_rgba(59,130,246,0.15)]"
-  }`}
->
-  {/* MODES */}
-  <div className="flex gap-2 mb-3 mt-3 max-w-3xl mx-auto flex-wrap">
+      {/* FLOATING INPUT AREA */}
+<div className="relative z-20 px-6 pb-3 pt-1 bg-transparent">
+  {/* FLOATING MODE BUTTONS */}
+  <div className="flex items-center gap-3 mb-4 max-w-4xl mx-auto flex-wrap">
     {["quick", "deep", "research"].map(
       (item) => (
         <button
@@ -900,44 +898,34 @@ const [sidebarOpen, setSidebarOpen] =
           onClick={() =>
             setMode(item)
           }
-          className={`px-3 py-2 rounded-xl text-sm font-medium transition-all shadow-lg ${
+          className={`px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
             mode === item
-              ? item ===
-                "quick"
-                ? "bg-blue-600 text-white scale-105"
-                : item ===
-                  "deep"
-                ? "bg-purple-600 text-white scale-105"
-                : "bg-green-600 text-white scale-105"
+              ? item === "quick"
+                ? "bg-blue-600 text-white shadow-blue-500/40"
+                : item === "deep"
+                ? "bg-purple-600 text-white shadow-purple-500/40"
+                : "bg-green-600 text-white shadow-green-500/40"
               : darkMode
-              ? "bg-white/10 hover:bg-white/20"
-              : "bg-white hover:shadow-lg border border-gray-200"
+              ? "bg-white/10 text-white border border-white/10 hover:bg-white/20"
+              : "bg-white/70 text-black border border-white/40 shadow-white/40"
           }`}
         >
-          {item ===
-            "quick" &&
-            "⚡ Quick"}
-
-          {item ===
-            "deep" &&
-            "🧠 Deep"}
-
-          {item ===
-            "research" &&
-            "🌐 Research"}
+          {item === "quick" && "⚡ Quick"}
+          {item === "deep" && "🧠 Deep"}
+          {item === "research" && "🌐 Research"}
         </button>
       )
     )}
 
-    {/* IMAGE */}
+    {/* IMAGE BUTTON */}
     <label
-      className={`cursor-pointer rounded-xl px-3 py-2 flex items-center justify-center transition-all shadow-lg ${
+      className={`cursor-pointer rounded-2xl px-4 py-3 flex items-center justify-center transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
         darkMode
-          ? "bg-white/10 hover:bg-white/20"
-          : "bg-white border border-gray-200 hover:shadow-lg"
+          ? "bg-white/10 border border-white/10 hover:bg-white/20"
+          : "bg-white/70 border border-white/40"
       }`}
     >
-      <ImagePlus size={18} />
+      <ImagePlus size={20} />
 
       <input
         type="file"
@@ -945,21 +933,63 @@ const [sidebarOpen, setSidebarOpen] =
         hidden
         onChange={(e) => {
           if (
-            e.target
-              .files?.[0]
+            e.target.files?.[0]
           ) {
             setImage(
-              e.target
-                .files[0]
+              e.target.files[0]
             );
           }
         }}
       />
     </label>
+  </div>
 
-    {image && (
+  {/* FLOATING INPUT BAR */}
+ <div className="max-w-4xl mx-auto flex items-center gap-3 bg-transparent shadow-none border-none">
+    <div
+  className={`flex-1 flex items-center rounded-[28px] px-5 py-3 transition-all duration-500 backdrop-blur-2xl shadow-2xl ${
+    darkMode
+      ? "bg-white/10 border border-white/10"
+      : "bg-transparent border border-white/20 backdrop-blur-3xl shadow-none"
+  }`}
+>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) =>
+          setInput(
+            e.target.value
+          )
+        }
+        placeholder="Ask anything..."
+        className={`flex-1 bg-transparent outline-none text-lg ${
+          darkMode
+            ? "text-white placeholder:text-gray-400"
+            : "text-black placeholder:text-gray-500"
+        }`}
+        onKeyDown={(e) => {
+          if (
+            e.key === "Enter"
+          ) {
+            sendMessage();
+          }
+        }}
+      />
+    </div>
+
+    {/* SEND BUTTON */}
+    <button
+      onClick={sendMessage}
+      className="h-16 w-16 rounded-full bg-linear-to-r from-blue-600 via-cyan-500 to-purple-500 flex items-center justify-center shadow-[0_0_40px_rgba(59,130,246,0.45)] transition-all duration-300 hover:scale-110 hover:rotate-6"
+    >
+      <Send size={22} className="text-white" />
+    </button>
+  </div>
+
+  {/* IMAGE NAME */}
+     {image && (
       <div
-        className={`flex items-center text-xs px-3 rounded-xl ${
+        className={`max-w-4xl mx-auto mt-3 text-sm ${
           darkMode
             ? "text-gray-300"
             : "text-gray-700"
@@ -969,40 +999,6 @@ const [sidebarOpen, setSidebarOpen] =
       </div>
     )}
   </div>
-
-  {/* INPUT */}
-  <div className="flex gap-2 max-w-3xl mx-auto">
-    <input
-      type="text"
-      value={input}
-      onChange={(e) =>
-        setInput(
-          e.target.value
-        )
-      }
-      placeholder="Ask anything..."
-      className={`flex-1 rounded-2xl px-4 py-3 outline-none transition-all ${
-        darkMode
-          ? "bg-white/10 border border-white/10 text-white placeholder:text-gray-400 focus:border-blue-500 focus:shadow-[0_0_20px_rgba(59,130,246,0.3)]"
-          : "bg-white border border-gray-300 text-black placeholder:text-gray-500 shadow-lg focus:border-blue-500"
-      }`}
-      onKeyDown={(e) => {
-        if (
-          e.key === "Enter"
-        ) {
-          sendMessage();
-        }
-      }}
-    />
-
-    <button
-      onClick={sendMessage}
-      className="rounded-2xl bg-linear-to-r from-blue-600 via-cyan-500 to-purple-500 px-5 transition-all duration-300 shadow-[0_0_25px_rgba(59,130,246,0.4)] hover:scale-110 hover:rotate-3"
-    >
-      <Send size={18} />
-    </button>
-  </div>
-</div>
       </section>
     </main>
   );
