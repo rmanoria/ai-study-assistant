@@ -890,7 +890,7 @@ const [sidebarOpen, setSidebarOpen] =
       {/* FLOATING INPUT AREA */}
 <div className="relative z-20 px-6 pb-3 pt-1 bg-transparent">
   {/* FLOATING MODE BUTTONS */}
-  <div className="flex items-center gap-3 mb-4 max-w-4xl mx-auto flex-wrap">
+  <div className="flex items-center gap-2 mb-4 max-w-4xl mx-auto overflow-x-auto scrollbar-hide pb-1">
     {["quick", "deep", "research"].map(
       (item) => (
         <button
@@ -919,29 +919,25 @@ const [sidebarOpen, setSidebarOpen] =
 
     {/* IMAGE BUTTON */}
     <label
-      className={`cursor-pointer rounded-2xl px-4 py-3 flex items-center justify-center transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
-        darkMode
-          ? "bg-white/10 border border-white/10 hover:bg-white/20"
-          : "bg-white/70 border border-white/40"
-      }`}
-    >
-      <ImagePlus size={20} />
+  className={`shrink-0 cursor-pointer rounded-2xl px-4 py-3 flex items-center justify-center transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
+    darkMode
+      ? "bg-white/10 border border-white/10 hover:bg-white/20"
+      : "bg-white/20 border border-white/20 backdrop-blur-3xl"
+  }`}
+>
+  <ImagePlus size={20} />
 
-      <input
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          if (
-            e.target.files?.[0]
-          ) {
-            setImage(
-              e.target.files[0]
-            );
-          }
-        }}
-      />
-    </label>
+  <input
+    type="file"
+    accept="image/*"
+    hidden
+    onChange={(e) => {
+      if (e.target.files?.[0]) {
+        setImage(e.target.files[0]);
+      }
+    }}
+  />
+</label>
   </div>
 
   {/* FLOATING INPUT BAR */}

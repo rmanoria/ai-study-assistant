@@ -51,45 +51,49 @@ const uploadedImage =
       }
     }
 
-   if (
-  uploadedImage &&
-  uploadedImage.size > 0
-) {
-      const bytes = await uploadedImage.arrayBuffer();
+   if (uploadedImage && uploadedImage.size > 0) {
+  try {
+    const bytes = await uploadedImage.arrayBuffer();
 
-      const base64Image = Buffer.from(bytes).toString(
-        "base64"
-      );
+    const base64Image = Buffer.from(bytes).toString(
+      "base64"
+    );
 
-     const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
-});
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+    });
+console.log("IMAGE TYPE:", uploadedImage.type);
+console.log("IMAGE SIZE:", uploadedImage.size);
+console.log("REQUEST SENT TO GEMINI");
+    const result = await model.generateContent([
+      "Analyze this image and help the student understand it in detail.",
 
-const result = await model.generateContent({
-  contents: [
-    {
-      role: "user",
-      parts: [
-        {
-          text: "Analyze this image and help the student understand it.",
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType: uploadedImage.type,
         },
+      },
+    ]);
 
-        {
-          inlineData: {
-            mimeType: uploadedImage.type,
-            data: base64Image,
-          },
-        },
-      ],
-    },
-  ],
-});
-      const response = result.response.text();
+    const response =
+      result.response.text();
 
-      return Response.json({
-        reply: response,
-      });
-    }
+    return Response.json({
+      reply: response,
+    });
+  } catch (error: any) {
+    console.log(
+      "FULL IMAGE ERROR:",
+      error
+    );
+
+    return Response.json({
+      reply:
+        "⚠️ Gemini image analysis failed.",
+    });
+  }
+}
 
     // NORMAL CHAT
     const response = await groq.chat.completions.create({
@@ -133,12 +137,15 @@ GENERAL RULES:
         "No response",
     });
 
-  } catch (error) {
-   console.error(error);
+  } catch (error: any) {
+    console.error(
+      "FULL IMAGE ERROR:",
+      error
+    );
 
-return Response.json({
-  reply:
-    "⚠️ Image analysis is temporarily unavailable due to API quota limits. Normal chat still works.",
-});
+    return Response.json({
+      reply:
+        "⚠️ Image analysis failed. Check terminal logs.",
+    });
   }
 }
