@@ -1,1000 +1,557 @@
-
 "use client";
+
+import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  SignInButton,
-  UserButton,
-  useUser,
-} from "@clerk/nextjs";
-import {
-  useState,
-  useEffect,
-  useRef,
-} from "react";
+  Send, ImagePlus, Plus, MessageSquare, Trash2,
+  Pencil, Pin, Archive, Star, Menu, X,
+} from "lucide-react";
 
 import AnimatedBackground from "./components/AnimatedBackground";
 import ChatBubble from "./components/ChatBubble";
 import TypingLoader from "./components/TypingLoader";
+import FlashcardPanel from "./components/FlashcardPanel";
+import QuizPanel from "./components/QuizPanel";
+import NotesPanel from "./components/NotesPanel";
+import SummarizerPanel from "./components/SummarizerPanel";
+import PlannerPanel from "./components/PlannerPanel";
 
-import {
-  Send,
-  ImagePlus,
-  Plus,
-  MessageSquare,
-  Trash2,
-  Pencil,
-  Pin,
-  Archive,
-  Star,
-  Menu,
-} from "lucide-react";
+type Message = { role: "user" | "assistant"; content: string };
+type Chat = { id: string; title: string; messages: Message[]; pinned?: boolean; archived?: boolean; highlighted?: boolean };
+type Tool = "chat" | "flashcards" | "quiz" | "notes" | "summarizer" | "planner";
+type Mode = "quick" | "deep" | "research";
 
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+const TOOL_CONFIG: { id: Tool; emoji: string; label: string; color: string }[] = [
+  { id: "flashcards", emoji: "🃏", label: "Flashcards", color: "violet" },
+  { id: "quiz",       emoji: "🧠", label: "Quiz",       color: "cyan" },
+  { id: "notes",      emoji: "📝", label: "Notes",      color: "amber" },
+  { id: "summarizer", emoji: "⚡", label: "Summarizer", color: "green" },
+  { id: "planner",    emoji: "📅", label: "Planner",    color: "pink" },
+];
 
-type Chat = {
-  id: string;
-  title: string;
-  messages: Message[];
-  pinned?: boolean;
-  archived?: boolean;
-  highlighted?: boolean;
-};
+const STARTERS: Message[] = [{
+  role: "assistant",
+  content: "# Welcome to StudyAI Pro ✦\n\nI'm your advanced AI study assistant — smarter, faster, and more capable than ever.\n\n**What I can do:**\n- Explain any concept clearly at any level\n- Solve math, science, coding, and writing problems\n- Analyze images from your textbooks or notes\n- Help with essays, research, and assignments\n\nPick a mode above, or just ask me anything. Let's get studying! 🚀",
+}];
+
+const QUICK_PROMPTS = [
+  "Explain this concept simply",
+  "Give me practice problems",
+  "Summarize key points",
+  "Help me write an outline",
+  "Quiz me on this topic",
+];
 
 export default function Home() {
   const { isSignedIn } = useUser();
-  // STARTER MESSAGE
-  const starterMessages: Message[] = [
-    {
-      role: "assistant",
-      content:
-        "# Welcome to AI Study Assistant 🚀\n\nAsk me anything about school, coding, science, or research.",
-    },
-  ];
 
-  // STATES
-  const [chats, setChats] = useState<Chat[]>([
-    {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: starterMessages,
-    },
-  ]);
-const [sidebarOpen, setSidebarOpen] =
-  useState(false);
-  const [activeChatId, setActiveChatId] =
-    useState(chats[0].id);
-
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string>("");
+  const [activeTool, setActiveTool] = useState<Tool>("chat");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [image, setImage] = useState<File | null>(null);
+  const [mode, setMode] = useState<Mode>("quick");
+  const [autoScroll, setAutoScroll] = useState(true);
 
-  const [image, setImage] =
-    useState<File | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const [mode, setMode] =
-    useState("quick");
-
-  const [darkMode, setDarkMode] =
-    useState(true);
-
-  const [autoScroll, setAutoScroll] =
-    useState(true);
-
-  const bottomRef =
-    useRef<HTMLDivElement>(null);
-
-  const chatContainerRef =
-    useRef<HTMLDivElement>(null);
-
-  // CURRENT CHAT
-  const currentChat =
-    chats.find(
-      (chat) => chat.id === activeChatId
-    ) || chats[0];
-
-  const messages =
-    currentChat?.messages || [];
-
-  // AUTO SCROLL DETECTION
+  // LOAD CHATS
   useEffect(() => {
-    const container =
-      chatContainerRef.current;
-
-    if (!container) return;
-
-    const handleScroll = () => {
-      const nearBottom =
-        container.scrollHeight -
-          container.scrollTop -
-          container.clientHeight <
-        150;
-
-      setAutoScroll(nearBottom);
-    };
-
-    container.addEventListener(
-      "scroll",
-      handleScroll
-    );
-
-    return () =>
-      container.removeEventListener(
-        "scroll",
-        handleScroll
-      );
-  }, []);
-
-  // AUTO SCROLL
- useEffect(() => {
-  if (
-    autoScroll &&
-    chatContainerRef.current
-  ) {
-    chatContainerRef.current.scrollTo({
-      top: chatContainerRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }
-}, [messages, loading, autoScroll]);
-
-  // LOAD SAVED CHATS
-  useEffect(() => {
-    const savedChats =
-      localStorage.getItem(
-        "ai-study-chats"
-      );
-
-    if (savedChats) {
-      const parsedChats =
-        JSON.parse(savedChats);
-
-      setChats(parsedChats);
-
-      if (parsedChats.length > 0) {
-        setActiveChatId(
-          parsedChats[0].id
-        );
+    const saved = localStorage.getItem("studyai-pro-chats");
+    if (saved) {
+      const parsed: Chat[] = JSON.parse(saved);
+      if (parsed.length > 0) {
+        setChats(parsed);
+        setActiveChatId(parsed[0].id);
+        return;
       }
     }
+    const initial = createChatObj();
+    setChats([initial]);
+    setActiveChatId(initial.id);
   }, []);
 
   // SAVE CHATS
   useEffect(() => {
-    localStorage.setItem(
-      "ai-study-chats",
-      JSON.stringify(chats)
-    );
+    if (chats.length > 0) {
+      localStorage.setItem("studyai-pro-chats", JSON.stringify(chats));
+    }
   }, [chats]);
 
-  // CREATE CHAT
-  const createNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: starterMessages,
-    };
-
-    setChats((prev) => [
-      newChat,
-      ...prev,
-    ]);
-
-    setActiveChatId(newChat.id);
-  };
-
-  // DELETE CHAT
-  const deleteChat = (
-    id: string
-  ) => {
-    const updatedChats =
-      chats.filter(
-        (chat) => chat.id !== id
-      );
-
-    setChats(updatedChats);
-
-    if (updatedChats.length > 0) {
-      setActiveChatId(
-        updatedChats[0].id
-      );
+  // AUTO SCROLL
+  useEffect(() => {
+    if (autoScroll && chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
     }
-  };
+  }, [chats, loading, autoScroll]);
 
-  // RENAME CHAT
-  const renameChat = (
-    id: string
-  ) => {
-    const newTitle = prompt(
-      "Rename chat:"
-    );
+  // SCROLL DETECTION
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const handler = () => {
+      setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 150);
+    };
+    el.addEventListener("scroll", handler);
+    return () => el.removeEventListener("scroll", handler);
+  }, []);
 
+  function createChatObj(): Chat {
+    return { id: Date.now().toString(), title: "New Chat", messages: [...STARTERS] };
+  }
+
+  function newChat() {
+    const chat = createChatObj();
+    setChats((prev) => [chat, ...prev]);
+    setActiveChatId(chat.id);
+    setActiveTool("chat");
+  }
+
+  function deleteChat(id: string) {
+    setChats((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      if (activeChatId === id && updated.length > 0) setActiveChatId(updated[0].id);
+      return updated;
+    });
+  }
+
+  function renameChat(id: string) {
+    const newTitle = prompt("Rename chat:");
     if (!newTitle) return;
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c)));
+  }
+
+  function pinChat(id: string) {
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c)));
+  }
+
+  function archiveChat(id: string) {
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, archived: !c.archived } : c)));
+  }
+
+  function highlightChat(id: string) {
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, highlighted: !c.highlighted } : c)));
+  }
+
+  const currentChat = chats.find((c) => c.id === activeChatId);
+  const messages = currentChat?.messages || [];
+
+  const sendToChat = useCallback((text: string) => {
+    setActiveTool("chat");
+    setInput(text);
+    inputRef.current?.focus();
+  }, []);
+
+  async function sendMessage() {
+    if (!input.trim() && !image) return;
+    const userContent = input.trim() || "Analyze this image for studying.";
+
+    const newMessages: Message[] = [...messages, { role: "user", content: userContent }];
 
     setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === id
+      prev.map((c) =>
+        c.id === activeChatId
           ? {
-              ...chat,
-              title: newTitle,
-            }
-          : chat
-      )
-    );
-  };
-
-  // PIN CHAT
-  const pinChat = (id: string) => {
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === id
-          ? {
-              ...chat,
-              pinned:
-                !chat.pinned,
-            }
-          : chat
-      )
-    );
-  };
-
-  // ARCHIVE CHAT
-  const archiveChat = (
-    id: string
-  ) => {
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === id
-          ? {
-              ...chat,
-              archived:
-                !chat.archived,
-            }
-          : chat
-      )
-    );
-  };
-
-  // HIGHLIGHT CHAT
-  const highlightChat = (
-    id: string
-  ) => {
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === id
-          ? {
-              ...chat,
-              highlighted:
-                !chat.highlighted,
-            }
-          : chat
-      )
-    );
-  };
-
-  // SEND MESSAGE
-  const sendMessage = async () => {
-    if (!input.trim() && !image)
-      return;
-
-    const userMessage =
-      input.trim() ||
-      "Explain this image";
-
-    const newMessages: Message[] = [
-      ...messages,
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ];
-
-    // UPDATE CHAT
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === activeChatId
-          ? {
-              ...chat,
-              title:
-                chat.title ===
-                "New Chat"
-                  ? userMessage.slice(
-                      0,
-                      25
-                    )
-                  : chat.title,
+              ...c,
+              title: c.title === "New Chat" ? userContent.slice(0, 28) + (userContent.length > 28 ? "…" : "") : c.title,
               messages: newMessages,
             }
-          : chat
+          : c
       )
     );
 
     setInput("");
     setLoading(true);
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
 
     try {
-      const formData =
-        new FormData();
-
-      formData.append(
-        "messages",
-        JSON.stringify(newMessages)
-      );
-
+      const formData = new FormData();
+      formData.append("messages", JSON.stringify(newMessages));
       formData.append("mode", mode);
+      if (image instanceof File) formData.append("image", image);
 
-      if (image instanceof File) {
-        formData.append(
-          "image",
-          image
-        );
-      }
-
-      const res = await fetch(
-        "/api/chat",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
+      const res = await fetch("/api/chat", { method: "POST", body: formData });
       const data = await res.json();
+      const fullReply = data.reply || "No response returned.";
 
-      const fullReply =
-        data.reply ||
-        "No response returned.";
-
-      // EMPTY ASSISTANT MESSAGE
+      // Typed animation
       setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === activeChatId
-            ? {
-                ...chat,
-                messages: [
-                  ...chat.messages,
-                  {
-                    role:
-                      "assistant",
-                    content: "",
-                  },
-                ],
-              }
-            : chat
+        prev.map((c) =>
+          c.id === activeChatId ? { ...c, messages: [...c.messages, { role: "assistant", content: "" }] } : c
         )
       );
 
-      let typedText = "";
-
-      for (
-        let i = 0;
-        i < fullReply.length;
-        i++
-      ) {
-        typedText += fullReply[i];
-
-        if (i % 40 === 0) {
+      let typed = "";
+      for (let i = 0; i < fullReply.length; i++) {
+        typed += fullReply[i];
+        if (i % 30 === 0) {
+          const snapshot = typed;
           setChats((prev) =>
-            prev.map((chat) => {
-              if (
-                chat.id !==
-                activeChatId
-              )
-                return chat;
-
-              const updatedMessages =
-                [
-                  ...chat.messages,
-                ];
-
-              updatedMessages[
-                updatedMessages.length -
-                  1
-              ] = {
-                role: "assistant",
-                content:
-                  typedText,
-              };
-
-              return {
-                ...chat,
-                messages:
-                  updatedMessages,
-              };
+            prev.map((c) => {
+              if (c.id !== activeChatId) return c;
+              const msgs = [...c.messages];
+              msgs[msgs.length - 1] = { role: "assistant", content: snapshot };
+              return { ...c, messages: msgs };
             })
           );
-
-          await new Promise(
-            (resolve) =>
-              setTimeout(
-                resolve,
-                0
-              )
-          );
+          await new Promise((r) => setTimeout(r, 0));
         }
       }
 
-      // FINAL FULL RESPONSE
+      // Final full
       setChats((prev) =>
-        prev.map((chat) => {
-          if (
-            chat.id !==
-            activeChatId
-          )
-            return chat;
-
-          const updatedMessages =
-            [...chat.messages];
-
-          updatedMessages[
-            updatedMessages.length - 1
-          ] = {
-            role: "assistant",
-            content: fullReply,
-          };
-
-          return {
-            ...chat,
-            messages:
-              updatedMessages,
-          };
+        prev.map((c) => {
+          if (c.id !== activeChatId) return c;
+          const msgs = [...c.messages];
+          msgs[msgs.length - 1] = { role: "assistant", content: fullReply };
+          return { ...c, messages: msgs };
         })
       );
-    } catch (error) {
+    } catch {
       setChats((prev) =>
-        prev.map((chat) => {
-          if (
-            chat.id !==
-            activeChatId
-          )
-            return chat;
-
-          return {
-            ...chat,
-            messages: [
-              ...chat.messages,
-              {
-                role: "assistant",
-                content:
-                  "Something went wrong 😢",
-              },
-            ],
-          };
-        })
+        prev.map((c) =>
+          c.id === activeChatId
+            ? { ...c, messages: [...c.messages, { role: "assistant", content: "⚠️ Something went wrong. Please try again." }] }
+            : c
+        )
       );
     } finally {
       setLoading(false);
       setImage(null);
     }
-  };
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }
+
+  const sortedChats = [...chats]
+    .filter((c) => !c.archived)
+    .sort((a, b) => (a.pinned ? -1 : b.pinned ? 1 : 0));
+
+  const archivedChats = chats.filter((c) => c.archived);
 
   return (
-  <main
-  className={`relative flex h-screen overflow-hidden transition-all duration-500 ${
-    darkMode
-      ? "bg-transparent text-white"
-      : "bg-[radial-gradient(circle_at_top,#dbeafe_0%,#eef2ff_35%,#f8fafc_70%,#ffffff_100%)] text-black"
-  }`}
->
+    <main className="relative flex h-screen overflow-hidden bg-transparent text-white">
       <AnimatedBackground />
-     {!darkMode && (
-  <>
-    {/* TOP LEFT GLOW */}
-    <div className="pointer-events-none absolute -top-20 -left-20 h-105 w-105 rounded-full bg-blue-500/35 blur-[120px] animate-pulse" />
-
-    {/* BOTTOM RIGHT GLOW */}
-    <div className="pointer-events-none absolute -bottom-20 -right-20 h-105 w-105 rounded-full bg-purple-500/30 blur-[120px] animate-pulse" />
-
-    {/* CENTER CYAN AURA */}
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="h-80 w-[320px] rounded-full bg-cyan-400/20 blur-[100px] animate-pulse" />
-    </div>
-
-    {/* EXTRA FLOATING LIGHT */}
-    <div className="pointer-events-none absolute top-[20%] right-[20%] h-45 w-45 rounded-full bg-pink-300/20 blur-[80px] animate-pulse" />
-
-    <div className="pointer-events-none absolute bottom-[20%] left-[15%] h-50 w-50 rounded-full bg-sky-300/20 blur-[90px] animate-pulse" />
-  </>
-)}
 
       {/* SIDEBAR */}
-     <aside
-  className={`fixed md:relative z-50 h-full w-80 flex flex-col border-r transition-all duration-300 ${
-    sidebarOpen
-      ? "translate-x-0"
-      : "-translate-x-full md:translate-x-0"
-  } ${
-          darkMode
-            ? "border-white/10 bg-black/40 backdrop-blur-2xl"
-            : "border-white/40 bg-white/60 backdrop-blur-2xl shadow-2xl"
-        }`}
+      <aside
+        className={`fixed md:relative z-50 h-full flex flex-col border-r border-white/8 backdrop-blur-2xl transition-all duration-300
+          ${sidebarOpen ? "w-72 translate-x-0" : "w-0 -translate-x-full md:w-0 md:translate-x-0 overflow-hidden"}
+          bg-black/50`}
       >
-        {/* LOGO */}
-        <div className="p-6 border-b border-white/10">
-          <h1 className="text-3xl font-black tracking-tight">
-            AI Study Assistant
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-white/8 shrink-0">
+          <h1 className="text-xl font-black tracking-tight bg-linear-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+            StudyAI Pro ✦
           </h1>
-
-          <p
-            className={`mt-2 text-sm ${
-              darkMode
-                ? "text-gray-400"
-                : "text-gray-700"
-            }`}
-          >
-            Smart AI learning platform
-          </p>
+          <p className="text-xs text-gray-500 mt-1">Your intelligent study workspace</p>
         </div>
-{/* AUTH */}
-<div className="px-4 mt-2 pb-4">
-  {!isSignedIn ? (
-    <div
-      className={`relative overflow-hidden rounded-3xl border p-5 transition-all ${
-        darkMode
-          ? "bg-white/5 border-white/10 backdrop-blur-2xl"
-          : "bg-white/70 border-white/40 backdrop-blur-2xl shadow-xl"
-      }`}
-    >
-      {/* Glow */}
-      <div className="absolute inset-0 bg-linear-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10 animate-pulse" />
 
-      <div className="relative z-10">
-        <h2 className="text-md font-bold">
-          Welcome Back ✨
-        </h2>
-
-        <p
-          className={`text-sm mt-1 ${
-            darkMode
-              ? "text-gray-400"
-              : "text-gray-600"
-          }`}
-        >
-          Sign in to sync chats and unlock your AI workspace.
-        </p>
-
-        <SignInButton mode="modal">
-          <button className=" w-full rounded-2xl bg-linear-to-r from-blue-600 via-purple-600 to-cyan-500 px-4 py-3 font-semibold text-white shadow-2xl transition-all hover:scale-[1.03] hover:shadow-blue-500/30">
-            🚀 Continue with Clerk
-          </button>
-        </SignInButton>
-      </div>
-    </div>
-  ) : (
-    <div
-      className={`rounded-3xl border p-4 flex items-center justify-between transition-all ${
-        darkMode
-          ? "bg-white/5 border-white/10 backdrop-blur-2xl"
-          : "bg-white/70 border-white/40 backdrop-blur-2xl shadow-xl"
-      }`}
-    >
-      <div>
-        <h2 className="font-semibold">
-          You're signed in ✨
-        </h2>
-
-        <p
-          className={`text-sm ${
-            darkMode
-              ? "text-gray-400"
-              : "text-gray-600"
-          }`}
-        >
-          Your chats are now personalized
-        </p>
-      </div>
-
-      <div className="scale-110">
-        <UserButton />
-      </div>
-    </div>
-  )}
-</div>
-{!darkMode && (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-    <div className="absolute -top-50 -left-50 h-125 w-125 rounded-full bg-blue-400/40 blur-3xl animate-pulse" />
-
-    <div className="absolute -bottom-50 -right-50 h-125 w-125 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
-
-    <div className="absolute top-[30%] left-[40%] h-87.5 w-87.5 rounded-full bg-cyan-300/30 blur-3xl animate-pulse" />
-
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.7),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.15),transparent_40%)]" />
-
-    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(255,255,255,0.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.4)_1px,transparent_1px)] bg-size-[40px_40px]" />
-  </div>
-)}
-{!darkMode && (
-  <div
-    className="pointer-events-none absolute inset-0 opacity-[0.05]"
-    style={{
-      backgroundImage: `
-        linear-gradient(to right, rgba(59,130,246,0.15) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(59,130,246,0.15) 1px, transparent 1px)
-      `,
-      backgroundSize: "60px 60px",
-    }}
-  />
-)}
-        {/* NEW CHAT */}
-        <div className="p-4">
-          <button
-            onClick={createNewChat}
-            className="w-full -mt-6 flex items-center justify-center gap-2 rounded-2xl bg-blue-600 hover:bg-blue-700 px-4 py-4 font-semibold transition-all shadow-xl hover:scale-[1.02]"
-          >
-            <Plus size={20} />
-            New Chat
-          </button>
-        </div>
-       
-
-        {/* CHAT HISTORY */}
-        <div className="flex-1 overflow-y-auto px-4 space-y-3">
-          {chats
-            .filter(
-              (chat) =>
-                !chat.archived
-            )
-            .sort((a, b) =>
-              a.pinned
-                ? -1
-                : b.pinned
-                ? 1
-                : 0
-            )
-            .map((chat) => (
-              <div
-                key={chat.id}
-                className={`rounded-2xl mt-1 p-3 transition-all ${
-                  activeChatId ===
-                  chat.id
-                    ? darkMode
-                      ? "bg-blue-600"
-                      : "bg-white border border-gray-200 shadow-xl"
-                    : darkMode
-                    ? "bg-white/5"
-                    : "bg-white/70 shadow-md"
-                } ${
-                  chat.highlighted
-                    ? "ring-2 ring-yellow-400"
-                    : ""
-                }`}
-              >
-                <button
-                  onClick={() =>
-                    setActiveChatId(
-                      chat.id
-                    )
-                  }
-                  className="w-full text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <MessageSquare
-                      size={16}
-                    />
-
-                    <span className="truncate">
-                      {chat.title}
-                    </span>
-                  </div>
-                </button>
-                {/* ARCHIVED CHATS */}
-<div className="px-4 pb-4">
-  <h2
-    className={`text-xs uppercase mb-3 ${
-      darkMode
-        ? "text-gray-400"
-        : "text-gray-600"
-    }`}
-  >
-    Archived
-  </h2>
-
-  <div className="space-y-3">
-    {chats
-      .filter((chat) => chat.archived)
-      .map((chat) => (
-        <div
-          key={chat.id}
-          className={`rounded-2xl p-3 transition-all ${
-            darkMode
-              ? "bg-white/5"
-              : "bg-white/70 shadow-md"
-          }`}
-        >
-          {/* CHAT BUTTON */}
-          <button
-            onClick={() =>
-              setActiveChatId(chat.id)
-            }
-            className="w-full text-left"
-          >
-            <div className="flex items-center gap-2">
-              <Archive size={16} />
-
-              <span className="truncate">
-                {chat.title}
-              </span>
+        {/* Auth */}
+        <div className="px-4 py-3 border-b border-white/8 shrink-0">
+          {!isSignedIn ? (
+            <SignInButton mode="modal">
+              <button className="w-full rounded-xl bg-linear-to-r from-violet-600 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+                🚀 Sign in to sync chats
+              </button>
+            </SignInButton>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-white">Signed in ✨</p>
+                <p className="text-[11px] text-gray-500">Chats are personalized</p>
+              </div>
+              <UserButton />
             </div>
+          )}
+        </div>
+
+        {/* New Chat */}
+        <div className="px-4 py-3 shrink-0">
+          <button
+            onClick={newChat}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-semibold transition-all shadow-lg hover:scale-[1.02]"
+          >
+            <Plus size={16} /> New Chat
           </button>
+        </div>
 
-          {/* ACTIONS */}
-          <div className="flex gap-2 mt-3">
-            {/* RESTORE */}
-            <button
-              onClick={() =>
-                archiveChat(chat.id)
-              }
-              className="p-2 rounded-lg hover:bg-white/10"
-            >
-              <Archive size={14} />
-            </button>
-
-            {/* DELETE */}
-            <button
-              onClick={() =>
-                deleteChat(chat.id)
-              }
-              className="p-2 rounded-lg hover:bg-red-500/20"
-            >
-              <Trash2 size={14} />
-            </button>
+        {/* Study Tools */}
+        <div className="px-4 pb-2 shrink-0">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-2">Study Tools</p>
+          <div className="flex flex-col gap-1">
+            {TOOL_CONFIG.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTool(t.id)}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all text-left
+                  ${activeTool === t.id
+                    ? "bg-white/10 text-white border border-white/15"
+                    : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                  }`}
+              >
+                <span>{t.emoji}</span>
+                <span className="font-medium">{t.label}</span>
+              </button>
+            ))}
           </div>
         </div>
-      ))}
-  </div>
-</div>
 
-                {/* ACTIONS */}
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() =>
-                      pinChat(
-                        chat.id
-                      )
-                    }
-                  >
-                    <Pin size={14} />
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      archiveChat(
-                        chat.id
-                      )
-                    }
-                  >
-                    <Archive
-                      size={14}
-                    />
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      highlightChat(
-                        chat.id
-                      )
-                    }
-                  >
-                    <Star size={14} />
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      renameChat(
-                        chat.id
-                      )
-                    }
-                  >
-                    <Pencil
-                      size={14}
-                    />
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      deleteChat(
-                        chat.id
-                      )
-                    }
-                  >
-                    <Trash2
-                      size={14}
-                    />
-                  </button>
+        {/* Chat History */}
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-2">Chats</p>
+          <div className="flex flex-col gap-1">
+            {sortedChats.map((chat) => (
+              <div
+                key={chat.id}
+                className={`group rounded-xl p-2.5 transition-all cursor-pointer
+                  ${activeChatId === chat.id && activeTool === "chat"
+                    ? "bg-violet-600/30 border border-violet-500/30"
+                    : "hover:bg-white/5"
+                  }
+                  ${chat.highlighted ? "ring-1 ring-yellow-500/40" : ""}`}
+              >
+                <button onClick={() => { setActiveChatId(chat.id); setActiveTool("chat"); }} className="w-full text-left">
+                  <div className="flex items-center gap-2">
+                    {chat.pinned && <Pin size={11} className="text-amber-400 shrink-0" />}
+                    <MessageSquare size={13} className="text-gray-500 shrink-0" />
+                    <span className="truncate text-xs text-gray-300">{chat.title}</span>
+                  </div>
+                </button>
+                <div className="hidden group-hover:flex gap-1 mt-2">
+                  <button onClick={() => pinChat(chat.id)} className="p-1 rounded hover:bg-white/10"><Pin size={11} /></button>
+                  <button onClick={() => archiveChat(chat.id)} className="p-1 rounded hover:bg-white/10"><Archive size={11} /></button>
+                  <button onClick={() => highlightChat(chat.id)} className="p-1 rounded hover:bg-white/10"><Star size={11} /></button>
+                  <button onClick={() => renameChat(chat.id)} className="p-1 rounded hover:bg-white/10"><Pencil size={11} /></button>
+                  <button onClick={() => deleteChat(chat.id)} className="p-1 rounded hover:bg-red-500/20 text-red-400"><Trash2 size={11} /></button>
                 </div>
               </div>
             ))}
-        </div>
+          </div>
 
-        {/* DARK MODE */}
-        <div className="p-5">
-          <button
-            onClick={() =>
-              setDarkMode(
-                !darkMode
-              )
-            }
-            className={`w-full rounded-2xl px-4 py-3 font-medium transition-all ${
-              darkMode
-                ? "bg-white/10 hover:bg-white/20 text-white"
-                : "bg-black text-white hover:bg-zinc-800 shadow-lg"
-            }`}
-          >
-            {darkMode
-              ? "☀️ Light Mode"
-              : "🌙 Dark Mode"}
-          </button>
+          {archivedChats.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-2">Archived</p>
+              {archivedChats.map((chat) => (
+                <div key={chat.id} className="group flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5 cursor-pointer">
+                  <Archive size={12} className="text-gray-600" />
+                  <span className="flex-1 truncate text-xs text-gray-500">{chat.title}</span>
+                  <button onClick={() => archiveChat(chat.id)} className="hidden group-hover:block p-1 hover:bg-white/10 rounded text-xs">↩</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </aside>
 
       {/* MAIN */}
-     <section className="relative flex flex-1 flex-col overflow-hidden bg-transparent">
-        <div className="md:hidden p-4">
-  <button
-    onClick={() =>
-      setSidebarOpen(!sidebarOpen)
-    }
-   className="absolute top-0 right-0 z-999 m-4 p-3 rounded-xl bg-white/70 backdrop-blur-xl shadow-lg"
-  >
-    <Menu size={22} />
-  </button>
-</div>
-        {/* CHAT AREA */}
-      <div
-  ref={chatContainerRef}
-  className="flex-1 overflow-y-auto p-6 space-y-6"
->
-        
-          {messages.map(
-            (msg, index) => (
-              <div
-                key={index}
-                className={`max-w-[85%] rounded-3xl p-5 transition-all duration-500 hover:scale-[1.01] hover:-translate-y-1 shadow-xl ${
-                  msg.role ===
-                  "user"
-                    ? "bg-blue-600 text-white ml-auto"
-                    : darkMode
-                    ? "bg-zinc-900 border border-white/10 text-white"
-                    : "bg-white border border-gray-200 text-black"
-                }`}
-              >
-               <ChatBubble
-  role={msg.role}
-  content={msg.content}
-  darkMode={darkMode}
-/>
-              </div>
-            )
-          )}
+      <section className="relative flex flex-1 flex-col overflow-hidden">
+        {/* TOPBAR */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/8 backdrop-blur-xl bg-black/20 shrink-0">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+          >
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
 
-          {loading && (
-            <TypingLoader />
-          )}
+          <div className="flex-1 text-sm font-semibold truncate">
+            {activeTool === "chat"
+              ? (currentChat?.title || "Chat")
+              : TOOL_CONFIG.find((t) => t.id === activeTool)?.label || ""}
+          </div>
 
-          
+          {/* Mode pills — only show in chat */}
+          {activeTool === "chat" && (
+            <div className="flex gap-1.5">
+              {(["quick", "deep", "research"] as Mode[]).map((m) => {
+                const cfg = { quick: { label: "⚡ Quick", active: "bg-violet-600" }, deep: { label: "🧠 Deep", active: "bg-purple-700" }, research: { label: "🔬 Research", active: "bg-green-700" } }[m];
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all
+                      ${mode === m
+                        ? `${cfg.active} border-transparent text-white`
+                        : "bg-transparent border-white/10 text-gray-400 hover:text-white hover:border-white/20"
+                      }`}
+                  >
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-{/* LIGHT MODE FUTURISTIC EFFECTS */}
-{!darkMode && (
-  <>
-    {/* Animated gradient sweep */}
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(59,130,246,0.08),rgba(168,85,247,0.08),rgba(34,211,238,0.08))] bg-size-[200%_200%] animate-[gradientMove_8s_ease_infinite]" />
 
-    {/* Floating blur orbs */}
-    <div className="pointer-events-none absolute -top-10 left-10 h-32 w-32 rounded-full bg-blue-400/30 blur-3xl animate-pulse" />
+        {/* TOOL PANELS */}
+        {activeTool !== "chat" && (
+          <div className="flex flex-1 overflow-hidden">
+            {activeTool === "flashcards" && <FlashcardPanel />}
+            {activeTool === "quiz" && <QuizPanel />}
+            {activeTool === "notes" && <NotesPanel onSendToChat={sendToChat} />}
+            {activeTool === "summarizer" && <SummarizerPanel />}
+            {activeTool === "planner" && <PlannerPanel />}
+          </div>
+        )}
 
-    <div className="pointer-events-none absolute bottom-0 right-10 h-40 w-40 rounded-full bg-purple-400/30 blur-3xl animate-pulse" />
+        {/* CHAT VIEW */}
+        {activeTool === "chat" && (
+          <>
+            {/* Messages */}
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-5 py-6 space-y-5">
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""} group`}
+                >
+                  {/* Avatar */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 mt-0.5
+                    ${msg.role === "user"
+                      ? "bg-violet-600"
+                      : "bg-linear-to-br from-violet-500 to-cyan-500"
+                    }`}
+                  >
+                    {msg.role === "user" ? "👤" : "✦"}
+                  </div>
 
-    {/* Mesh glow */}
-    <div className="pointer-events-none absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
-  </>
-)}
-      {/* FLOATING INPUT AREA */}
-<div className="relative z-20 px-6 pb-3 pt-1 bg-transparent">
-  {/* FLOATING MODE BUTTONS */}
-  <div className="flex items-center gap-2 mb-4 max-w-4xl mx-auto overflow-x-auto scrollbar-hide pb-1">
-    {["quick", "deep", "research"].map(
-      (item) => (
-        <button
-          key={item}
-          onClick={() =>
-            setMode(item)
-          }
-          className={`px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
-            mode === item
-              ? item === "quick"
-                ? "bg-blue-600 text-white shadow-blue-500/40"
-                : item === "deep"
-                ? "bg-purple-600 text-white shadow-purple-500/40"
-                : "bg-green-600 text-white shadow-green-500/40"
-              : darkMode
-              ? "bg-white/10 text-white border border-white/10 hover:bg-white/20"
-              : "bg-white/70 text-black border border-white/40 shadow-white/40"
-          }`}
-        >
-          {item === "quick" && "⚡ Quick"}
-          {item === "deep" && "🧠 Deep"}
-          {item === "research" && "🌐 Research"}
-        </button>
-      )
-    )}
+                  <div className="max-w-[80%]">
+                    <div
+                      className={`rounded-2xl px-5 py-4 shadow-lg transition-all hover:scale-[1.005]
+                        ${msg.role === "user"
+                          ? "bg-violet-600 text-white rounded-tr-sm"
+                          : "bg-black/40 border border-white/10 backdrop-blur-xl rounded-tl-sm"
+                        }`}
+                    >
+                      {msg.role === "user" ? (
+                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                      ) : (
+                        <ChatBubble role={msg.role} content={msg.content} darkMode={true} />
+                      )}
+                    </div>
 
-    {/* IMAGE BUTTON */}
-    <label
-  className={`shrink-0 cursor-pointer rounded-2xl px-4 py-3 flex items-center justify-center transition-all duration-300 shadow-xl backdrop-blur-xl hover:scale-105 ${
-    darkMode
-      ? "bg-white/10 border border-white/10 hover:bg-white/20"
-      : "bg-white/20 border border-white/20 backdrop-blur-3xl"
-  }`}
->
-  <ImagePlus size={20} />
+                    {/* Message actions */}
+                    {msg.role === "assistant" && (
+                      <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(msg.content)}
+                          className="text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                        >
+                          📋 Copy
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTool("flashcards");
+                          }}
+                          className="text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                        >
+                          🃏 Flashcards
+                        </button>
+                        <button
+                          onClick={() => {
+                            localStorage.setItem("studyai-new-note", JSON.stringify({ title: "AI Response", body: msg.content }));
+                            setActiveTool("notes");
+                          }}
+                          className="text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                        >
+                          📝 Save Note
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
 
-  <input
-    type="file"
-    accept="image/*"
-    hidden
-    onChange={(e) => {
-      if (e.target.files?.[0]) {
-        setImage(e.target.files[0]);
-      }
-    }}
-  />
-</label>
-  </div>
+              {loading && (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm shrink-0">
+                    ✦
+                  </div>
+                  <div className="bg-black/40 border border-white/10 backdrop-blur-xl rounded-2xl rounded-tl-sm px-5 py-4">
+                    <TypingLoader />
+                  </div>
+                </div>
+              )}
+            </div>
 
-  {/* FLOATING INPUT BAR */}
- <div className="max-w-4xl mx-auto flex items-center gap-3 bg-transparent shadow-none border-none">
-    <div
-  className={`flex-1 flex items-center rounded-[28px] px-5 py-3 transition-all duration-500 backdrop-blur-2xl shadow-2xl ${
-    darkMode
-      ? "bg-white/10 border border-white/10"
-      : "bg-transparent border border-white/20 backdrop-blur-3xl shadow-none"
-  }`}
->
-      <input
-        type="text"
-        value={input}
-        onChange={(e) =>
-          setInput(
-            e.target.value
-          )
-        }
-        placeholder="Ask anything..."
-        className={`flex-1 bg-transparent outline-none text-lg ${
-          darkMode
-            ? "text-white placeholder:text-gray-400"
-            : "text-black placeholder:text-gray-500"
-        }`}
-        onKeyDown={(e) => {
-          if (
-            e.key === "Enter"
-          ) {
-            sendMessage();
-          }
-        }}
-      />
-    </div>
+            {/* INPUT AREA */}
+            <div className="px-5 pb-5 pt-3 backdrop-blur-xl bg-black/10 shrink-0">
+              {/* Quick prompts */}
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-hide">
+                {QUICK_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => { setInput(p); inputRef.current?.focus(); }}
+                    className="shrink-0 px-3.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-violet-500/40 text-gray-400 hover:text-violet-300 rounded-full text-xs font-medium transition-all"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
 
-    {/* SEND BUTTON */}
-    <button
-      onClick={sendMessage}
-      className="h-16 w-16 rounded-full bg-linear-to-r from-blue-600 via-cyan-500 to-purple-500 flex items-center justify-center shadow-[0_0_40px_rgba(59,130,246,0.45)] transition-all duration-300 hover:scale-110 hover:rotate-6"
-    >
-      <Send size={22} className="text-white" />
-    </button>
-  </div>
+              {/* Image preview */}
+              {image && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-3 py-2 w-fit">
+                  📷 {image.name}
+                  <button
+                    onClick={() => setImage(null)}
+                    className="text-red-400 hover:text-red-300 ml-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
-  {/* IMAGE NAME */}
-     {image && (
-      <div
-        className={`max-w-4xl mx-auto mt-3 text-sm ${
-          darkMode
-            ? "text-gray-300"
-            : "text-gray-700"
-        }`}
-      >
-        📷 {image.name}
-      </div>
-    )}
-  </div>
+              {/* Input row */}
+              <div className="flex items-end gap-3">
+                {/* Image upload */}
+                <label className="shrink-0 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer transition-all text-gray-400 hover:text-white">
+                  <ImagePlus size={18} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && setImage(e.target.files[0])}
+                  />
+                </label>
+
+                {/* Text input */}
+                <div className="flex-1 bg-white/5 border border-white/10 focus-within:border-violet-500/50 rounded-2xl px-4 py-3 transition-colors">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => { setInput(e.target.value); autoResize(e.target); }}
+                    onKeyDown={handleKey}
+                    placeholder="Ask anything… (Shift+Enter for newline)"
+                    rows={1}
+                    className="w-full bg-transparent outline-none text-white placeholder:text-gray-500 text-sm resize-none leading-6 max-h-28"
+                  />
+                </div>
+
+                {/* Send */}
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || (!input.trim() && !image)}
+                  className="shrink-0 h-12 w-12 rounded-xl bg-linear-to-br from-violet-600 to-cyan-500 flex items-center justify-center shadow-lg transition-all hover:scale-105 hover:shadow-violet-500/30 disabled:opacity-40 disabled:scale-100"
+                >
+                  <Send size={18} className="text-white" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
