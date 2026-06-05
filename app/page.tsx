@@ -16,7 +16,11 @@ import NotesPanel from "./components/NotesPanel";
 import SummarizerPanel from "./components/SummarizerPanel";
 import PlannerPanel from "./components/PlannerPanel";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  imageUrl?: string; // base64 or object URL for display
+};
 type Chat = { id: string; title: string; messages: Message[]; pinned?: boolean; archived?: boolean; highlighted?: boolean };
 type Tool = "chat" | "flashcards" | "quiz" | "notes" | "summarizer" | "planner";
 type Mode = "quick" | "deep" | "research";
@@ -48,15 +52,22 @@ export default function Home() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>("");
   const [activeTool, setActiveTool] = useState<Tool>("chat");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (window.innerWidth >= 768) setSidebarOpen(true);
+  }, []);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("quick");
   const [autoScroll, setAutoScroll] = useState(true);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // LOAD CHATS
   useEffect(() => {
@@ -98,6 +109,26 @@ export default function Home() {
     el.addEventListener("scroll", handler);
     return () => el.removeEventListener("scroll", handler);
   }, []);
+
+  // Revoke object URL on unmount / change
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  function handleImageSelect(file: File) {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImage(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+  }
+
+  function clearImage() {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImage(null);
+    setImagePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   function createChatObj(): Chat {
     return { id: Date.now().toString(), title: "New Chat", messages: [...STARTERS] };
@@ -149,7 +180,16 @@ export default function Home() {
     if (!input.trim() && !image) return;
     const userContent = input.trim() || "Analyze this image for studying.";
 
-    const newMessages: Message[] = [...messages, { role: "user", content: userContent }];
+    // Store the current preview URL to embed in the message
+    const msgImageUrl = imagePreviewUrl ?? undefined;
+
+    const newUserMsg: Message = {
+      role: "user",
+      content: userContent,
+      imageUrl: msgImageUrl,
+    };
+
+    const newMessages: Message[] = [...messages, newUserMsg];
 
     setChats((prev) =>
       prev.map((c) =>
@@ -165,21 +205,28 @@ export default function Home() {
 
     setInput("");
     setLoading(true);
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-    }
+    if (inputRef.current) inputRef.current.style.height = "auto";
+
+    // Capture image file before clearing
+    const imageFile = image;
+    // Clear image state immediately so the preview in the input bar goes away
+    setImage(null);
+    setImagePreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     try {
       const formData = new FormData();
-      formData.append("messages", JSON.stringify(newMessages));
+      // Send messages without imageUrl (not needed server-side)
+      const serverMessages = newMessages.map(({ role, content }) => ({ role, content }));
+      formData.append("messages", JSON.stringify(serverMessages));
       formData.append("mode", mode);
-      if (image instanceof File) formData.append("image", image);
+      if (imageFile instanceof File) formData.append("image", imageFile);
 
       const res = await fetch("/api/chat", { method: "POST", body: formData });
       const data = await res.json();
       const fullReply = data.reply || "No response returned.";
 
-      // Typed animation
+      // Add empty assistant message for typing animation
       setChats((prev) =>
         prev.map((c) =>
           c.id === activeChatId ? { ...c, messages: [...c.messages, { role: "assistant", content: "" }] } : c
@@ -203,7 +250,6 @@ export default function Home() {
         }
       }
 
-      // Final full
       setChats((prev) =>
         prev.map((c) => {
           if (c.id !== activeChatId) return c;
@@ -222,7 +268,6 @@ export default function Home() {
       );
     } finally {
       setLoading(false);
-      setImage(null);
     }
   }
 
@@ -245,11 +290,19 @@ export default function Home() {
     <main className="relative flex h-screen overflow-hidden bg-transparent text-white">
       <AnimatedBackground />
 
+      {/* MOBILE OVERLAY */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
       <aside
-        className={`fixed md:relative z-50 h-full flex flex-col border-r border-white/8 backdrop-blur-2xl transition-all duration-300
-          ${sidebarOpen ? "w-72 translate-x-0" : "w-0 -translate-x-full md:w-0 md:translate-x-0 overflow-hidden"}
-          bg-black/50`}
+        className={`fixed md:relative z-50 h-full flex flex-col border-r border-white/8 backdrop-blur-2xl transition-transform duration-300 w-72
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:-translate-x-full md:w-0 md:overflow-hidden"}
+          bg-black/80 md:bg-black/50`}
       >
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/8 shrink-0">
@@ -323,7 +376,7 @@ export default function Home() {
                   }
                   ${chat.highlighted ? "ring-1 ring-yellow-500/40" : ""}`}
               >
-                <button onClick={() => { setActiveChatId(chat.id); setActiveTool("chat"); }} className="w-full text-left">
+                <button onClick={() => { setActiveChatId(chat.id); setActiveTool("chat"); if (window.innerWidth < 768) setSidebarOpen(false); }} className="w-full text-left">
                   <div className="flex items-center gap-2">
                     {chat.pinned && <Pin size={11} className="text-amber-400 shrink-0" />}
                     <MessageSquare size={13} className="text-gray-500 shrink-0" />
@@ -359,36 +412,41 @@ export default function Home() {
       {/* MAIN */}
       <section className="relative flex flex-1 flex-col overflow-hidden">
         {/* TOPBAR */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-white/8 backdrop-blur-xl bg-black/20 shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8 backdrop-blur-xl bg-black/20 shrink-0 relative z-10">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+            className="shrink-0 p-2.5 rounded-xl bg-white/8 hover:bg-white/15 border border-white/10 transition-colors text-gray-300 hover:text-white active:scale-95"
           >
             {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          <div className="flex-1 text-sm font-semibold truncate">
+          <div className="flex-1 text-sm font-semibold truncate min-w-0">
             {activeTool === "chat"
               ? (currentChat?.title || "Chat")
               : TOOL_CONFIG.find((t) => t.id === activeTool)?.label || ""}
           </div>
 
-          {/* Mode pills — only show in chat */}
           {activeTool === "chat" && (
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 shrink-0">
               {(["quick", "deep", "research"] as Mode[]).map((m) => {
-                const cfg = { quick: { label: "⚡ Quick", active: "bg-violet-600" }, deep: { label: "🧠 Deep", active: "bg-purple-700" }, research: { label: "🔬 Research", active: "bg-green-700" } }[m];
+                const cfg = {
+                  quick:    { label: "⚡ Quick",    icon: "⚡", active: "bg-violet-600" },
+                  deep:     { label: "🧠 Deep",     icon: "🧠", active: "bg-purple-700" },
+                  research: { label: "🔬 Research", icon: "🔬", active: "bg-green-700" },
+                }[m];
                 return (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all
+                    className={`rounded-full font-bold border transition-all
+                      px-2 py-1.5 text-base md:px-3 md:text-[11px]
                       ${mode === m
                         ? `${cfg.active} border-transparent text-white`
                         : "bg-transparent border-white/10 text-gray-400 hover:text-white hover:border-white/20"
                       }`}
                   >
-                    {cfg.label}
+                    <span className="md:hidden">{cfg.icon}</span>
+                    <span className="hidden md:inline">{cfg.label}</span>
                   </button>
                 );
               })}
@@ -427,7 +485,19 @@ export default function Home() {
                     {msg.role === "user" ? "👤" : "✦"}
                   </div>
 
-                  <div className="max-w-[80%]">
+                  <div className={`max-w-[80%] flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                    {/* Image attachment — shown above the text bubble */}
+                    {msg.role === "user" && msg.imageUrl && (
+                      <div className="rounded-xl overflow-hidden border border-violet-500/30 shadow-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={msg.imageUrl}
+                          alt="Uploaded image"
+                          className="max-w-65 max-h-50 object-cover block"
+                        />
+                      </div>
+                    )}
+
                     <div
                       className={`rounded-2xl px-5 py-4 shadow-lg transition-all hover:scale-[1.005]
                         ${msg.role === "user"
@@ -444,7 +514,7 @@ export default function Home() {
 
                     {/* Message actions */}
                     {msg.role === "assistant" && (
-                      <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => navigator.clipboard?.writeText(msg.content)}
                           className="text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
@@ -452,9 +522,7 @@ export default function Home() {
                           📋 Copy
                         </button>
                         <button
-                          onClick={() => {
-                            setActiveTool("flashcards");
-                          }}
+                          onClick={() => setActiveTool("flashcards")}
                           className="text-[11px] px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
                         >
                           🃏 Flashcards
@@ -501,29 +569,47 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Image preview */}
-              {image && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-xl px-3 py-2 w-fit">
-                  📷 {image.name}
-                  <button
-                    onClick={() => setImage(null)}
-                    className="text-red-400 hover:text-red-300 ml-1"
-                  >
-                    ✕
-                  </button>
+              {/* Image preview (thumbnail) */}
+              {imagePreviewUrl && (
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="relative group/img">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imagePreviewUrl}
+                      alt="Image to send"
+                      className="h-20 w-auto max-w-40 rounded-xl object-cover border border-violet-500/40 shadow-md"
+                    />
+                    <button
+                      onClick={clearImage}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity shadow-md hover:bg-red-400"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-400 self-end pb-1">
+                    <span className="text-cyan-400 font-medium">{image?.name}</span>
+                    <br />
+                    <span className="text-gray-500">Ready to send</span>
+                  </div>
                 </div>
               )}
 
               {/* Input row */}
               <div className="flex items-end gap-3">
                 {/* Image upload */}
-                <label className="shrink-0 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer transition-all text-gray-400 hover:text-white">
+                <label className={`shrink-0 p-3 border rounded-xl cursor-pointer transition-all
+                  ${imagePreviewUrl
+                    ? "bg-violet-600/20 border-violet-500/50 text-violet-400"
+                    : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-400 hover:text-white"
+                  }`}
+                >
                   <ImagePlus size={18} />
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => e.target.files?.[0] && setImage(e.target.files[0])}
+                    onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
                   />
                 </label>
 
@@ -534,7 +620,7 @@ export default function Home() {
                     value={input}
                     onChange={(e) => { setInput(e.target.value); autoResize(e.target); }}
                     onKeyDown={handleKey}
-                    placeholder="Ask anything… (Shift+Enter for newline)"
+                    placeholder={imagePreviewUrl ? "Add a message about this image… (optional)" : "Ask anything… (Shift+Enter for newline)"}
                     rows={1}
                     className="w-full bg-transparent outline-none text-white placeholder:text-gray-500 text-sm resize-none leading-6 max-h-28"
                   />

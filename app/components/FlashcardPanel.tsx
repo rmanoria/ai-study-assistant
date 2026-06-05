@@ -7,7 +7,7 @@ type Flashcard = { q: string; a: string; tag: string };
 
 export default function FlashcardPanel() {
   const [topic, setTopic] = useState("");
-  const [count, setCount] = useState("8");
+  const [count, setCount] = useState(8);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -15,6 +15,7 @@ export default function FlashcardPanel() {
 
   async function generate() {
     if (!topic.trim()) return;
+    const validCount = Math.max(1, Math.min(50, count));
     setLoading(true);
     setError("");
     setCards([]);
@@ -24,7 +25,7 @@ export default function FlashcardPanel() {
       const res = await fetch("/api/tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: "flashcards", payload: { topic, count } }),
+        body: JSON.stringify({ tool: "flashcards", payload: { topic, count: String(validCount) } }),
       });
       const data = await res.json();
       if (data.data) setCards(data.data);
@@ -66,16 +67,30 @@ export default function FlashcardPanel() {
           placeholder="Topic (e.g. Photosynthesis, JavaScript, French Revolution…)"
           className="flex-1 min-w-55 bg-white/5 border border-white/10 text-white placeholder:text-gray-500 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/60 transition-colors"
         />
-        <select
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-          className="bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/60"
-        >
-          <option value="5">5 cards</option>
-          <option value="8">8 cards</option>
-          <option value="12">12 cards</option>
-          <option value="16">16 cards</option>
-        </select>
+
+        {/* Custom count input */}
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus-within:border-violet-500/60 transition-colors">
+          <span className="text-xs text-gray-400 whitespace-nowrap">Cards:</span>
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={count}
+            onChange={(e) => setCount(Number(e.target.value))}
+            className="w-14 bg-transparent text-white text-sm outline-none text-center font-semibold"
+          />
+          <div className="flex flex-col gap-0.5">
+            <button
+              onClick={() => setCount((c) => Math.min(50, c + 1))}
+              className="text-gray-500 hover:text-violet-400 leading-none text-xs"
+            >▲</button>
+            <button
+              onClick={() => setCount((c) => Math.max(1, c - 1))}
+              className="text-gray-500 hover:text-violet-400 leading-none text-xs"
+            >▼</button>
+          </div>
+        </div>
+
         <button
           onClick={generate}
           disabled={loading || !topic.trim()}
@@ -84,6 +99,24 @@ export default function FlashcardPanel() {
           {loading ? <Loader2 size={16} className="animate-spin" /> : "✦"}
           {loading ? "Generating…" : "Generate Cards"}
         </button>
+      </div>
+
+      {/* Quick presets */}
+      <div className="flex gap-2 flex-wrap">
+        <span className="text-xs text-gray-500 self-center">Quick:</span>
+        {[5, 10, 15, 20, 30].map((n) => (
+          <button
+            key={n}
+            onClick={() => setCount(n)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
+              ${count === n
+                ? "bg-violet-600 border-violet-500 text-white"
+                : "bg-white/5 border-white/10 text-gray-400 hover:border-violet-500/40 hover:text-violet-300"
+              }`}
+          >
+            {n}
+          </button>
+        ))}
       </div>
 
       {/* Stats */}
@@ -173,7 +206,7 @@ export default function FlashcardPanel() {
           <div className="text-5xl mb-2">🃏</div>
           <div className="text-white font-semibold text-lg">Create your first flashcard deck</div>
           <div className="text-gray-400 text-sm max-w-xs">
-            Enter any topic above and AI will generate a full deck of study cards instantly.
+            Enter any topic above, set how many cards you want, and AI will generate your deck instantly.
           </div>
         </div>
       )}
