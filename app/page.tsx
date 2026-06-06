@@ -38,7 +38,7 @@ const TOOL_CONFIG: { id: Tool; emoji: string; label: string }[] = [
 
 const STARTERS: Message[] = [{
   role: "assistant",
-  content: "# Welcome to StudyAI Pro ✦\n\nI'm your advanced AI study assistant — smarter, faster, and more capable than ever.\n\n**What I can do:**\n- Explain any concept clearly at any level\n- Solve math, science, coding, and writing problems\n- Analyze images from your textbooks or notes\n- Help with essays, research, and assignments\n\nPick a mode above, or just ask me anything. Let's get studying! 🚀",
+  content: "# Welcome to StudyAI Pro ✦\n\nI'm your advanced AI study assistant smarter, faster, and more capable than ever.\n\n**What I can do:**\n- Explain any concept clearly at any level\n- Solve math, science, coding, and writing problems\n- Analyze images from your textbooks or notes\n- Help with essays, research, and assignments\n\nPick a mode above, or just ask me anything. Let's get studying! 🚀",
 }];
 
 const QUICK_PROMPTS = [

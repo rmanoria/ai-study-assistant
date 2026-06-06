@@ -24,7 +24,9 @@ export default function ChatBubble({ content, darkMode = true }: Props) {
         prose-table:border prose-th:border prose-td:border
         prose-th:p-2 prose-td:p-2
         prose-blockquote:border-l-4 prose-blockquote:pl-4 prose-blockquote:italic
-        prose-li:mb-1
+        prose-ul:my-2 prose-ul:list-disc prose-ul:pl-5
+        prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-5
+        prose-li:my-1 prose-li:pl-1
         ${
           darkMode
             ? `
@@ -55,6 +57,40 @@ export default function ChatBubble({ content, darkMode = true }: Props) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Render ul with visible disc bullets
+          ul({ children }) {
+            return (
+              <ul
+                style={{ listStyleType: "disc", paddingLeft: "1.4rem", margin: "0.5rem 0" }}
+                className={darkMode ? "text-gray-200" : "text-gray-700"}
+              >
+                {children}
+              </ul>
+            );
+          },
+          // Render ol with decimal numbers
+          ol({ children }) {
+            return (
+              <ol
+                style={{ listStyleType: "decimal", paddingLeft: "1.4rem", margin: "0.5rem 0" }}
+                className={darkMode ? "text-gray-200" : "text-gray-700"}
+              >
+                {children}
+              </ol>
+            );
+          },
+          // Render li normally — browser handles the marker
+          li({ children }) {
+            return (
+              <li
+                style={{ marginBottom: "0.3rem", paddingLeft: "0.25rem" }}
+                className={darkMode ? "text-gray-200" : "text-gray-700"}
+              >
+                {children}
+              </li>
+            );
+          },
+
           code({ inline, className, children, ...props }: {
             inline?: boolean;
             className?: string;

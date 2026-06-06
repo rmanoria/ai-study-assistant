@@ -92,7 +92,7 @@ export default function FlashcardPanel() {
           disabled={loading || !topic.trim()}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-sm font-semibold transition-all"
         >
-          {loading ? <Loader2 size={15} className="animate-spin" /> : "✦"}
+          {loading ? <Loader2 size={15} className="animate-spin" /> : "✦  "}
           {loading ? "Generating…" : "Generate"}
         </button>
       </div>
@@ -186,7 +186,7 @@ export default function FlashcardPanel() {
           <div className="text-5xl mb-2">🃏</div>
           <div className="text-white font-semibold text-lg">Create your first deck</div>
           <div className="text-gray-400 text-sm max-w-xs">
-            Enter any topic, set how many cards you want, and AI generates your deck instantly.
+            Enter any topic, set how many cards you want, and StudyPro AI generates your deck instantly.
           </div>
         </div>
       )}
