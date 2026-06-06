@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, CalendarDays, Plus, CheckSquare, Square, Trash2, CheckCheck } from "lucide-react";
+import {
+  Loader2, CalendarDays, Plus, CheckSquare, Square,
+  Trash2, CheckCheck, ChevronLeft, Pencil, Sparkles,
+} from "lucide-react";
 
 type Task    = { text: string; done: boolean; dissolving?: boolean };
 type Subject = { name: string; color: string; tasks: Task[]; dissolving?: boolean };
@@ -15,7 +18,6 @@ const DISSOLVE_CSS = `
   100% { opacity:0; filter:blur(8px) brightness(0.2); transform:scale(0.94); }
 }
 .dissolve-out { animation:pixelDissolve 0.55s ease-in forwards; pointer-events:none; }
-
 @keyframes pixelDissolveRow {
   0%   { opacity:1; filter:blur(0px) brightness(1); transform:scaleY(1) translateX(0); }
   25%  { filter:blur(0.5px) brightness(1.5); transform:scaleY(1) translateX(2px); }
@@ -23,7 +25,6 @@ const DISSOLVE_CSS = `
   100% { opacity:0; filter:blur(6px) brightness(0); transform:scaleY(0.7) translateX(4px); }
 }
 .dissolve-row { animation:pixelDissolveRow 0.45s ease-in forwards; pointer-events:none; }
-
 @keyframes planDissolve {
   0%   { opacity:1; filter:blur(0px) brightness(1) saturate(1); transform:scale(1); }
   20%  { filter:blur(0px) brightness(2) saturate(2); transform:scale(1.005); }
@@ -34,8 +35,7 @@ const DISSOLVE_CSS = `
 `;
 
 const COLORS = ["#6c63ff","#10b981","#f59e0b","#ec4899","#22d3ee","#f97316","#ef4444","#8b5cf6"];
-
-function uid() { return Math.random().toString(36).slice(2,10); }
+function uid() { return Math.random().toString(36).slice(2, 10); }
 
 export default function PlannerPanel() {
   const [plans, setPlans]               = useState<Plan[]>([]);
@@ -43,6 +43,8 @@ export default function PlannerPanel() {
   const [expanded, setExpanded]         = useState<Set<number>>(new Set());
   const [goal, setGoal]                 = useState("");
   const [loading, setLoading]           = useState(false);
+  const [mobileView, setMobileView]     = useState<"list" | "detail" | "ai">("list");
+  const [showAI, setShowAI]             = useState(false);
   const styleInjected                   = useRef(false);
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function PlannerPanel() {
     persist(updated);
     setActivePlanId(plan.id);
     setExpanded(new Set());
+    setMobileView("detail");
   }
 
   function deletePlan(id: string) {
@@ -84,7 +87,9 @@ export default function PlannerPanel() {
       setPlans(prev => {
         const cleaned = prev.filter(p => p.id !== id);
         localStorage.setItem("studyai-plans-v1", JSON.stringify(cleaned));
-        if (activePlanId === id) setActivePlanId(cleaned[0]?.id ?? "");
+        const next = cleaned[0]?.id ?? "";
+        setActivePlanId(next);
+        if (!next) setMobileView("list");
         return cleaned;
       });
     }, 720);
@@ -93,8 +98,7 @@ export default function PlannerPanel() {
   function completePlan(id: string) {
     setPlans(prev => prev.map(p =>
       p.id !== id ? p : {
-        ...p,
-        dissolving: true,
+        ...p, dissolving: true,
         subjects: p.subjects.map(s => ({ ...s, tasks: s.tasks.map(t => ({ ...t, done: true })) }))
       }
     ));
@@ -102,7 +106,9 @@ export default function PlannerPanel() {
       setPlans(prev => {
         const cleaned = prev.filter(p => p.id !== id);
         localStorage.setItem("studyai-plans-v1", JSON.stringify(cleaned));
-        if (activePlanId === id) setActivePlanId(cleaned[0]?.id ?? "");
+        const next = cleaned[0]?.id ?? "";
+        setActivePlanId(next);
+        if (!next) setMobileView("list");
         return cleaned;
       });
     }, 720);
@@ -112,6 +118,12 @@ export default function PlannerPanel() {
     const name = prompt("Rename plan:");
     if (!name?.trim()) return;
     persist(plans.map(p => p.id === id ? { ...p, name: name.trim() } : p));
+  }
+
+  function selectPlan(id: string) {
+    setActivePlanId(id);
+    setExpanded(new Set());
+    setMobileView("detail");
   }
 
   // ── Subject actions ───────────────────────────────────────────
@@ -152,23 +164,20 @@ export default function PlannerPanel() {
     if (!activePlan) return;
     const task = activePlan.subjects[si].tasks[ti];
     if (task.dissolving) return;
-
     if (!task.done) {
       const withDissolve = activePlan.subjects.map((s, i) =>
         i === si ? { ...s, tasks: s.tasks.map((t, j) => j === ti ? { ...t, done: true, dissolving: true } : t) } : s
       );
       setPlans(prev => prev.map(p => p.id === activePlanId ? { ...p, subjects: withDissolve } : p));
       setTimeout(() => {
-        const cleaned = withDissolve.map((s, i) =>
+        updateActivePlan(withDissolve.map((s, i) =>
           i === si ? { ...s, tasks: s.tasks.filter((_, j) => j !== ti) } : s
-        );
-        updateActivePlan(cleaned);
+        ));
       }, 480);
     } else {
-      const updated = activePlan.subjects.map((s, i) =>
+      updateActivePlan(activePlan.subjects.map((s, i) =>
         i === si ? { ...s, tasks: s.tasks.map((t, j) => j === ti ? { ...t, done: false } : t) } : s
-      );
-      updateActivePlan(updated);
+      ));
     }
   }
 
@@ -179,10 +188,9 @@ export default function PlannerPanel() {
     );
     setPlans(prev => prev.map(p => p.id === activePlanId ? { ...p, subjects: withDissolve } : p));
     setTimeout(() => {
-      const cleaned = withDissolve.map((s, i) =>
+      updateActivePlan(withDissolve.map((s, i) =>
         i === si ? { ...s, tasks: s.tasks.filter((_, j) => j !== ti) } : s
-      );
-      updateActivePlan(cleaned);
+      ));
     }, 480);
   }
 
@@ -190,10 +198,9 @@ export default function PlannerPanel() {
     if (!activePlan) return;
     const text = prompt("New task:");
     if (!text?.trim()) return;
-    const updated = activePlan.subjects.map((s, i) =>
+    updateActivePlan(activePlan.subjects.map((s, i) =>
       i === si ? { ...s, tasks: [...s.tasks, { text: text.trim(), done: false }] } : s
-    );
-    updateActivePlan(updated);
+    ));
   }
 
   function toggleExpanded(i: number) {
@@ -218,18 +225,17 @@ export default function PlannerPanel() {
       });
       const data = await res.json();
       if (data.data) {
-        const subjects: Subject[] = data.data.map(
-          (s: { name: string; color: string; tasks: string[] }) => ({
-            ...s,
-            tasks: s.tasks.map((t: string) => ({ text: t, done: false })),
-          })
-        );
+        const subjects: Subject[] = data.data.map((s: { name: string; color: string; tasks: string[] }) => ({
+          ...s, tasks: s.tasks.map((t: string) => ({ text: t, done: false })),
+        }));
         const plan: Plan = { id: uid(), name: name.trim(), subjects };
         const updated = [...plans, plan];
         persist(updated);
         setActivePlanId(plan.id);
         setExpanded(new Set(subjects.map((_, i) => i)));
         setGoal("");
+        setShowAI(false);
+        setMobileView("detail");
       }
     } catch { /* silent */ }
     setLoading(false);
@@ -241,253 +247,410 @@ export default function PlannerPanel() {
   const doneTasks  = subjects.reduce((a, s) => a + s.tasks.filter(t => t.done).length, 0);
   const overallPct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  return (
-    <div className="flex flex-1 overflow-hidden">
-
-      {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-52 shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl overflow-hidden">
-        <div className="px-4 py-4 border-b border-white/8 shrink-0">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="p-1.5 rounded-lg bg-pink-500/20 border border-pink-500/30">
-              <CalendarDays size={14} className="text-pink-400" />
-            </div>
-            <span className="text-xs font-bold text-white">My Plans</span>
-          </div>
-          <button
-            onClick={createPlan}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold transition-all"
-          >
-            <Plus size={12} /> New Plan
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1">
-          {plans.length === 0 && (
-            <p className="text-[11px] text-gray-600 text-center px-3 py-6 leading-relaxed">
-              No plans yet. Create one or use the AI generator.
-            </p>
-          )}
-          {plans.map(plan => (
-            <div
-              key={plan.id}
-              className={`group relative rounded-xl px-3 py-2.5 cursor-pointer transition-all
-                ${plan.dissolving ? "dissolve-plan" : ""}
-                ${activePlanId === plan.id
-                  ? "bg-violet-600/30 border border-violet-500/40 text-white"
-                  : "hover:bg-white/5 text-gray-400 hover:text-gray-200 border border-transparent"
-                }`}
-              onClick={() => { if (!plan.dissolving) { setActivePlanId(plan.id); setExpanded(new Set()); } }}
-            >
-              <div className="flex items-center gap-2 pr-10">
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: plan.subjects[0]?.color ?? "#6c63ff" }}
-                />
-                <span className="text-xs font-medium truncate">{plan.name}</span>
-              </div>
-              <span className="text-[10px] text-gray-600 mt-0.5 block pl-4">
-                {plan.subjects.reduce((a, s) => a + s.tasks.length, 0)} tasks
-              </span>
-
-              {/* Hover actions */}
-              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-0.5">
-                <button
-                  onClick={e => { e.stopPropagation(); renamePlan(plan.id); }}
-                  className="p-1 rounded text-gray-600 hover:text-gray-300 transition-colors text-[11px] leading-none"
-                  title="Rename"
-                >✎</button>
-                <button
-                  onClick={e => { e.stopPropagation(); deletePlan(plan.id); }}
-                  className="p-1 rounded text-gray-600 hover:text-red-400 transition-colors"
-                  title="Delete"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      {/* ── MAIN CONTENT ── */}
-      <div className="flex flex-1 flex-col gap-5 p-6 overflow-y-auto">
-
-        {/* No plan selected */}
-        {!activePlan && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-20">
-            <div className="text-5xl mb-2">📅</div>
-            <div className="text-white font-semibold text-lg">No plan selected</div>
-            <div className="text-gray-400 text-sm max-w-xs">
-              Create a new plan from the sidebar, or generate one with AI below.
-            </div>
-          </div>
-        )}
-
-        {activePlan && (
-          <>
-            {/* Plan header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">{activePlan.name}</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {totalTasks} tasks · {doneTasks} completed
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={addSubject}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-xl text-xs font-semibold transition-all"
-                >
-                  <Plus size={12} /> Subject
-                </button>
-                <button
-                  onClick={() => completePlan(activePlanId)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-green-600/20 hover:bg-green-600/40 border border-green-500/30 text-green-400 rounded-xl text-xs font-semibold transition-all"
-                  title="Mark complete and remove"
-                >
-                  <CheckCheck size={13} /> Complete
-                </button>
-                <button
-                  onClick={() => deletePlan(activePlanId)}
-                  className="p-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-gray-500 hover:text-red-400 rounded-xl transition-all"
-                  title="Delete plan"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Overall progress */}
-            {totalTasks > 0 && (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-semibold text-white">Overall Progress</span>
-                  <span className="text-sm font-bold text-violet-300">{overallPct}%</span>
-                </div>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${overallPct}%`, background: "linear-gradient(90deg,#6c63ff,#a78bfa)" }}
-                  />
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  {doneTasks} of {totalTasks} tasks completed
-                </div>
-              </div>
-            )}
-
-            {/* Subjects */}
-            <div className="flex flex-col gap-3">
-              {subjects.length === 0 && (
-                <div className="text-center py-10 text-gray-600 text-sm">
-                  No subjects yet. Add one above or generate a plan with AI below.
-                </div>
-              )}
-              {subjects.map((subj, si) => {
-                const done  = subj.tasks.filter(t => t.done && !t.dissolving).length;
-                const total = subj.tasks.length;
-                const pct   = total ? Math.round((done / total) * 100) : 0;
-                const isOpen = expanded.has(si);
-
-                return (
-                  <div
-                    key={si}
-                    className={`bg-white/5 border border-white/10 rounded-2xl overflow-hidden ${subj.dissolving ? "dissolve-out" : ""}`}
-                  >
-                    <div
-                      className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-white/5 transition-colors group"
-                      onClick={() => toggleExpanded(si)}
-                    >
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ background: subj.color }} />
-                      <div className="flex-1 font-semibold text-sm text-white">{subj.name}</div>
-                      <div className="text-xs text-gray-500 mr-2">{done}/{total}</div>
-                      <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, background: subj.color }}
-                        />
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteSubject(si); }}
-                        className="ml-2 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                        title="Delete subject"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                      <span className="text-gray-500 text-xs ml-1">{isOpen ? "▲" : "▼"}</span>
-                    </div>
-
-                    {isOpen && (
-                      <div className="px-5 pb-4 flex flex-col gap-1.5 border-t border-white/5 pt-3">
-                        {subj.tasks.map((task, ti) => (
-                          <div
-                            key={ti}
-                            className={`flex items-center gap-3 group/task rounded-xl px-2 py-1.5 hover:bg-white/5 transition-all ${task.dissolving ? "dissolve-row" : ""}`}
-                          >
-                            <div
-                              className="text-gray-500 hover:text-gray-300 transition-colors shrink-0 cursor-pointer"
-                              onClick={() => toggleTask(si, ti)}
-                            >
-                              {task.done
-                                ? <CheckSquare size={15} style={{ color: subj.color }} />
-                                : <Square size={15} />
-                              }
-                            </div>
-                            <span
-                              className={`text-sm flex-1 cursor-pointer select-none transition-all ${task.done ? "line-through text-gray-600" : "text-gray-300"}`}
-                              onClick={() => toggleTask(si, ti)}
-                            >
-                              {task.text}
-                            </span>
-                            <button
-                              onClick={() => deleteTask(si, ti)}
-                              className="opacity-0 group-hover/task:opacity-100 p-1 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => addTask(si)}
-                          className="mt-1 text-left text-xs text-gray-600 hover:text-gray-400 border border-dashed border-white/10 hover:border-white/20 rounded-lg px-3 py-2 transition-all"
-                        >
-                          + Add task
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {/* AI Plan Generator */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mt-auto shrink-0">
-          <div className="font-semibold text-sm text-white mb-1">✦ AI Study Plan Generator</div>
-          <p className="text-xs text-gray-500 mb-3">
-            Describe your goal and AI will build a complete plan with subjects and tasks.
-          </p>
-          <div className="flex gap-3">
-            <input
-              value={goal}
-              onChange={e => setGoal(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && generatePlan()}
-              placeholder="e.g. Prepare for calculus exam in 7 days"
-              className="flex-1 bg-white/5 border border-white/10 text-white placeholder:text-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/50 transition-colors"
-            />
-            <button
-              onClick={generatePlan}
-              disabled={loading || !goal.trim()}
-              className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-sm font-semibold transition-all shrink-0"
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : "✦"}
-              {loading ? "Generating…" : "Generate Plan"}
-            </button>
-          </div>
-        </div>
-
+  // ── AI Generator card (shared) ────────────────────────────────
+  const AIGenerator = ({ compact = false }: { compact?: boolean }) => (
+    <div className={`bg-white/5 border border-white/10 rounded-2xl ${compact ? "p-4" : "p-4 sm:p-5"}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles size={13} className="text-violet-400" />
+        <span className="font-semibold text-sm text-white">AI Study Plan Generator</span>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">Describe your goal and AI will build a complete plan with subjects and tasks.</p>
+      <div className="flex flex-col gap-2">
+        <input
+          value={goal}
+          onChange={e => setGoal(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && generatePlan()}
+          placeholder="e.g. Prepare for calculus exam in 7 days"
+          className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/50 transition-colors"
+        />
+        <button
+          onClick={generatePlan}
+          disabled={loading || !goal.trim()}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-sm font-semibold transition-all"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : "✦"}
+          {loading ? "Generating…" : "Generate Plan"}
+        </button>
       </div>
     </div>
+  );
+
+  // ── Plan detail content ───────────────────────────────────────
+  const PlanDetailContent = () => (
+    <div className="flex flex-col gap-4 p-4 sm:p-6 overflow-y-auto flex-1">
+
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        {/* Back — mobile only */}
+        <button
+          onClick={() => setMobileView("list")}
+          className="sm:hidden shrink-0 p-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 active:scale-95 transition-all"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-bold text-white truncate">{activePlan?.name}</h2>
+          <p className="text-xs text-gray-500">{totalTasks} tasks · {doneTasks} done</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={addSubject}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-xl text-xs font-semibold transition-all"
+          >
+            <Plus size={12} /> <span>Subject</span>
+          </button>
+          <button
+            onClick={() => renamePlan(activePlanId)}
+            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white rounded-xl transition-all"
+            title="Rename"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => completePlan(activePlanId)}
+            className="p-2 bg-green-600/20 hover:bg-green-600/40 border border-green-500/30 text-green-400 rounded-xl transition-all"
+            title="Mark complete"
+          >
+            <CheckCheck size={13} />
+          </button>
+          <button
+            onClick={() => deletePlan(activePlanId)}
+            className="p-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-gray-500 hover:text-red-400 rounded-xl transition-all"
+            title="Delete"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {totalTasks > 0 && (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-semibold text-white">Overall Progress</span>
+            <span className="text-sm font-bold text-violet-300">{overallPct}%</span>
+          </div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${overallPct}%`, background: "linear-gradient(90deg,#6c63ff,#a78bfa)" }}
+            />
+          </div>
+          <div className="text-xs text-gray-500 mt-2">{doneTasks} of {totalTasks} tasks completed</div>
+        </div>
+      )}
+
+      {/* Subjects */}
+      {subjects.length === 0 && (
+        <div className="text-center py-8 text-gray-600 text-sm">
+          No subjects yet. Tap "+ Subject" above to add one.
+        </div>
+      )}
+
+      {subjects.map((subj, si) => {
+        const done   = subj.tasks.filter(t => t.done && !t.dissolving).length;
+        const total  = subj.tasks.length;
+        const pct    = total ? Math.round((done / total) * 100) : 0;
+        const isOpen = expanded.has(si);
+
+        return (
+          <div
+            key={si}
+            className={`bg-white/5 border border-white/10 rounded-2xl overflow-hidden ${subj.dissolving ? "dissolve-out" : ""}`}
+          >
+            {/* Subject header */}
+            <div
+              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer active:bg-white/5 transition-colors group"
+              onClick={() => toggleExpanded(si)}
+            >
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: subj.color }} />
+              <div className="flex-1 font-semibold text-sm text-white truncate">{subj.name}</div>
+              <div className="text-xs text-gray-500 shrink-0">{done}/{total}</div>
+              <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden shrink-0">
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: subj.color }} />
+              </div>
+              {/* Delete subject — always visible on mobile */}
+              <button
+                onClick={e => { e.stopPropagation(); deleteSubject(si); }}
+                className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+              >
+                <Trash2 size={12} />
+              </button>
+              <span className="text-gray-500 text-xs shrink-0">{isOpen ? "▲" : "▼"}</span>
+            </div>
+
+            {/* Tasks */}
+            {isOpen && (
+              <div className="px-4 pb-4 flex flex-col gap-1 border-t border-white/5 pt-3">
+                {subj.tasks.length === 0 && (
+                  <p className="text-xs text-gray-600 py-2 text-center">No tasks yet</p>
+                )}
+                {subj.tasks.map((task, ti) => (
+                  <div
+                    key={ti}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 bg-white/2 border border-white/5 transition-all ${task.dissolving ? "dissolve-row" : ""}`}
+                  >
+                    <div
+                      className="shrink-0 cursor-pointer active:scale-90 transition-transform"
+                      onClick={() => toggleTask(si, ti)}
+                    >
+                      {task.done
+                        ? <CheckSquare size={16} style={{ color: subj.color }} />
+                        : <Square size={16} className="text-gray-500" />
+                      }
+                    </div>
+                    <span
+                      className={`text-sm flex-1 cursor-pointer select-none leading-snug transition-all ${task.done ? "line-through text-gray-600" : "text-gray-300"}`}
+                      onClick={() => toggleTask(si, ti)}
+                    >
+                      {task.text}
+                    </span>
+                    {/* Delete task — always visible, no hover required */}
+                    <button
+                      onClick={() => deleteTask(si, ti)}
+                      className="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => addTask(si)}
+                  className="mt-1 w-full text-center text-xs text-gray-600 hover:text-gray-400 border border-dashed border-white/10 hover:border-white/20 rounded-xl px-3 py-2.5 transition-all active:scale-[0.98]"
+                >
+                  + Add task
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* AI generator at bottom of detail */}
+      <AIGenerator />
+    </div>
+  );
+
+  // ── Plan list content ─────────────────────────────────────────
+  const PlanListContent = () => (
+    <div className="flex flex-col flex-1 overflow-hidden">
+
+      {/* Header matching other panels */}
+      <div className="flex items-center justify-between px-4 sm:px-6 pt-4 sm:pt-6 pb-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-pink-500/20 border border-pink-500/30 shrink-0">
+            <CalendarDays size={18} className="text-pink-400" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-white">Study Planner</h2>
+            <p className="text-xs text-gray-400">Track subjects and tasks</p>
+          </div>
+        </div>
+        <button
+          onClick={createPlan}
+          className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold transition-all active:scale-95"
+        >
+          <Plus size={13} /> New Plan
+        </button>
+      </div>
+
+      {/* Plan cards — scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pb-4 flex flex-col gap-3">
+        {plans.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-3 text-center py-12">
+            <div className="text-5xl mb-2">📅</div>
+            <div className="text-white font-semibold">No plans yet</div>
+            <div className="text-gray-400 text-sm max-w-xs">
+              Create a plan or use the AI generator below to build one instantly.
+            </div>
+          </div>
+        )}
+
+        {plans.map(plan => {
+          const planTotal = plan.subjects.reduce((a, s) => a + s.tasks.length, 0);
+          const planDone  = plan.subjects.reduce((a, s) => a + s.tasks.filter(t => t.done).length, 0);
+          const planPct   = planTotal ? Math.round((planDone / planTotal) * 100) : 0;
+          const isActive  = activePlanId === plan.id;
+
+          return (
+            <div
+              key={plan.id}
+              onClick={() => { if (!plan.dissolving) selectPlan(plan.id); }}
+              className={`group rounded-2xl border px-4 py-4 cursor-pointer transition-all active:scale-[0.99]
+                ${plan.dissolving ? "dissolve-plan" : ""}
+                ${isActive
+                  ? "bg-violet-600/20 border-violet-500/40"
+                  : "bg-white/5 border-white/10 hover:border-white/20"
+                }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: plan.subjects[0]?.color ?? "#6c63ff" }} />
+                <span className="font-semibold text-sm text-white flex-1 truncate">{plan.name}</span>
+                {/* Action buttons — always visible on mobile */}
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    onClick={e => { e.stopPropagation(); renamePlan(plan.id); }}
+                    className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/10 transition-all"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); deletePlan(plan.id); }}
+                    className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Mini progress bar */}
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${planPct}%`,
+                    background: plan.subjects[0]?.color ?? "#6c63ff",
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">
+                  {planDone}/{planTotal} tasks · {plan.subjects.length} subjects
+                </span>
+                <span className={`text-xs font-semibold ${isActive ? "text-violet-400" : "text-gray-600"}`}>
+                  {planPct}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* AI generator */}
+        <AIGenerator />
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* ── MOBILE: stack views ── */}
+      <div className="flex sm:hidden flex-1 overflow-hidden">
+        {mobileView === "list" && <PlanListContent />}
+        {mobileView === "detail" && (
+          activePlan
+            ? <PlanDetailContent />
+            : (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                <div className="text-5xl mb-2">📅</div>
+                <div className="text-white font-semibold">No plan selected</div>
+                <button onClick={() => setMobileView("list")} className="text-sm text-violet-400 underline">Back to plans</button>
+              </div>
+            )
+        )}
+      </div>
+
+      {/* ── DESKTOP: sidebar + detail ── */}
+      <div className="hidden sm:flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="w-64 shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl overflow-hidden">
+          {/* Sidebar header */}
+          <div className="px-4 py-4 border-b border-white/8 shrink-0">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-1.5 rounded-lg bg-pink-500/20 border border-pink-500/30">
+                <CalendarDays size={14} className="text-pink-400" />
+              </div>
+              <span className="text-xs font-bold text-white">My Plans</span>
+            </div>
+            <button
+              onClick={createPlan}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-semibold transition-all"
+            >
+              <Plus size={13} /> New Plan
+            </button>
+          </div>
+
+          {/* Plan list */}
+          <div className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1">
+            {plans.length === 0 && (
+              <p className="text-xs text-gray-600 text-center px-3 py-6 leading-relaxed">
+                No plans yet. Create one or use the AI generator below.
+              </p>
+            )}
+            {plans.map(plan => (
+              <div
+                key={plan.id}
+                className={`group relative rounded-xl px-3 py-3 cursor-pointer transition-all
+                  ${plan.dissolving ? "dissolve-plan" : ""}
+                  ${activePlanId === plan.id
+                    ? "bg-violet-600/30 border border-violet-500/40 text-white"
+                    : "hover:bg-white/5 text-gray-400 hover:text-gray-200 border border-transparent"
+                  }`}
+                onClick={() => { if (!plan.dissolving) selectPlan(plan.id); }}
+              >
+                <div className="flex items-center gap-2 pr-12">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: plan.subjects[0]?.color ?? "#6c63ff" }} />
+                  <span className="text-sm font-medium truncate">{plan.name}</span>
+                </div>
+                <span className="text-[10px] text-gray-600 mt-0.5 block pl-4">
+                  {plan.subjects.reduce((a, s) => a + s.tasks.length, 0)} tasks
+                </span>
+                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-0.5">
+                  <button onClick={e => { e.stopPropagation(); renamePlan(plan.id); }}
+                    className="p-1 rounded text-gray-600 hover:text-gray-300 text-[11px] leading-none">✎</button>
+                  <button onClick={e => { e.stopPropagation(); deletePlan(plan.id); }}
+                    className="p-1 rounded text-gray-600 hover:text-red-400"><Trash2 size={11} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* AI generator in sidebar */}
+          <div className="p-3 border-t border-white/8 shrink-0">
+            <button
+              onClick={() => setShowAI(v => !v)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white rounded-xl text-xs font-semibold transition-all mb-2"
+            >
+              <Sparkles size={12} /> AI Generator
+            </button>
+            {showAI && (
+              <div className="flex flex-col gap-2">
+                <input
+                  value={goal}
+                  onChange={e => setGoal(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && generatePlan()}
+                  placeholder="e.g. Calculus exam in 7 days"
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-600 rounded-xl px-3 py-2 text-xs outline-none focus:border-violet-500/50 transition-colors"
+                />
+                <button
+                  onClick={generatePlan}
+                  disabled={loading || !goal.trim()}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-xs font-semibold transition-all"
+                >
+                  {loading ? <Loader2 size={12} className="animate-spin" /> : "✦"}
+                  {loading ? "Generating…" : "Generate"}
+                </button>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Detail panel */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {activePlan ? <PlanDetailContent /> : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-8">
+              <div className="text-5xl mb-2">📅</div>
+              <div className="text-white font-semibold text-lg">No plan selected</div>
+              <div className="text-gray-400 text-sm max-w-xs">
+                Pick a plan from the sidebar or create a new one.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

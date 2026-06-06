@@ -4,7 +4,7 @@ import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send, ImagePlus, Plus, MessageSquare, Trash2,
-  Pencil, Pin, Archive, Star, Menu, X,
+  Pencil, Pin, Archive, Star, Menu, X, FileText, Paperclip,
 } from "lucide-react";
 
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -20,6 +20,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
+  fileName?: string;  // for PDF/doc attachments shown in bubble
 };
 type Chat = {
   id: string; title: string; messages: Message[];
@@ -27,6 +28,11 @@ type Chat = {
 };
 type Tool = "chat" | "flashcards" | "quiz" | "notes" | "summarizer" | "planner";
 type Mode = "quick" | "deep" | "research";
+
+// Attachment can be image OR document
+type Attachment =
+  | { kind: "image"; file: File; previewUrl: string }
+  | { kind: "doc";   file: File; extractedText: string };
 
 const TOOL_CONFIG: { id: Tool; emoji: string; label: string }[] = [
   { id: "flashcards", emoji: "🃏", label: "Flashcards" },
@@ -38,7 +44,7 @@ const TOOL_CONFIG: { id: Tool; emoji: string; label: string }[] = [
 
 const STARTERS: Message[] = [{
   role: "assistant",
-  content: "# Welcome to StudyAI Pro ✦\n\nI'm your advanced AI study assistant smarter, faster, and more capable than ever.\n\n**What I can do:**\n- Explain any concept clearly at any level\n- Solve math, science, coding, and writing problems\n- Analyze images from your textbooks or notes\n- Help with essays, research, and assignments\n\nPick a mode above, or just ask me anything. Let's get studying! 🚀",
+  content: "# Welcome to StudyAI Pro ✦\n\nI'm your advanced AI study assistant.\n\n**What I can do:**\n- Explain any concept clearly at any level\n- Solve math, science, coding, and writing problems\n- Analyze images from your textbooks or notes\n- Read and discuss PDF and Word documents\n- Help with essays, research, and assignments\n\nPick a mode above, or just ask me anything. Let's get studying! 🚀",
 }];
 
 const QUICK_PROMPTS = [
@@ -49,24 +55,68 @@ const QUICK_PROMPTS = [
   "Quiz me",
 ];
 
+// ── PDF/DOCX text extraction ─────────────────────────────────
+async function extractPdfText(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  const ab  = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab) }).promise;
+  const pages: string[] = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((i: unknown) => (i as { str?: string }).str ?? "").join(" "));
+  }
+  return pages.join("\n\n").trim();
+}
+
+async function extractDocxText(file: File): Promise<string> {
+  const mammoth = await import("mammoth");
+  const ab      = await file.arrayBuffer();
+  return (await mammoth.extractRawText({ arrayBuffer: ab })).value.trim();
+}
+
+async function extractDocText(file: File): Promise<string> {
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".pdf"))  return extractPdfText(file);
+  if (n.endsWith(".docx") || n.endsWith(".doc")) return extractDocxText(file);
+  // txt
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = (e) => res((e.target?.result as string) ?? "");
+    r.onerror = () => rej(new Error("Read failed"));
+    r.readAsText(file);
+  });
+}
+
+function isDocFile(file: File) {
+  const n = file.name.toLowerCase();
+  return n.endsWith(".pdf") || n.endsWith(".doc") || n.endsWith(".docx") || n.endsWith(".txt");
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith("image/");
+}
+
 export default function Home() {
   const { isSignedIn } = useUser();
 
-  const [chats, setChats]             = useState<Chat[]>([]);
+  const [chats, setChats]               = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>("");
-  const [activeTool, setActiveTool]   = useState<Tool>("chat");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTool, setActiveTool]     = useState<Tool>("chat");
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
 
   useEffect(() => {
     if (window.innerWidth >= 768) setSidebarOpen(true);
   }, []);
 
-  const [input, setInput]               = useState("");
-  const [loading, setLoading]           = useState(false);
-  const [image, setImage]               = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [mode, setMode]                 = useState<Mode>("quick");
-  const [autoScroll, setAutoScroll]     = useState(true);
+  const [input, setInput]           = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [mode, setMode]             = useState<Mode>("quick");
+  const [autoScroll, setAutoScroll] = useState(true);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef         = useRef<HTMLTextAreaElement>(null);
@@ -102,19 +152,38 @@ export default function Home() {
     return () => el.removeEventListener("scroll", handler);
   }, []);
 
+  // Revoke image preview URLs on change
   useEffect(() => {
-    return () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl); };
-  }, [imagePreviewUrl]);
+    return () => {
+      if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
+    };
+  }, [attachment]);
 
-  function handleImageSelect(file: File) {
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setImage(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+  async function handleFileSelect(file: File) {
+    // Revoke old preview if image
+    if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
+    setAttachment(null);
+
+    if (isImageFile(file)) {
+      setAttachment({ kind: "image", file, previewUrl: URL.createObjectURL(file) });
+    } else if (isDocFile(file)) {
+      setExtracting(true);
+      try {
+        const text = await extractDocText(file);
+        setAttachment({ kind: "doc", file, extractedText: text });
+      } catch {
+        alert("Could not read this file. Try a different PDF or DOCX.");
+      } finally {
+        setExtracting(false);
+      }
+    } else {
+      alert("Supported: images, PDF, DOCX, TXT");
+    }
   }
 
-  function clearImage() {
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setImage(null); setImagePreviewUrl(null);
+  function clearAttachment() {
+    if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
+    setAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -127,7 +196,6 @@ export default function Home() {
     setChats((prev) => [chat, ...prev]);
     setActiveChatId(chat.id);
     setActiveTool("chat");
-    // Close sidebar on mobile after creating chat
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
 
@@ -140,9 +208,9 @@ export default function Home() {
   }
 
   function renameChat(id: string) {
-    const newTitle = prompt("Rename chat:");
-    if (!newTitle) return;
-    setChats((prev) => prev.map((c) => c.id === id ? { ...c, title: newTitle } : c));
+    const t = prompt("Rename chat:");
+    if (!t) return;
+    setChats((prev) => prev.map((c) => c.id === id ? { ...c, title: t } : c));
   }
 
   function pinChat(id: string) {
@@ -167,16 +235,41 @@ export default function Home() {
   }, []);
 
   async function sendMessage() {
-    if (!input.trim() && !image) return;
-    const userContent  = input.trim() || "Analyze this image for studying.";
-    const msgImageUrl  = imagePreviewUrl ?? undefined;
-    const newUserMsg: Message = { role: "user", content: userContent, imageUrl: msgImageUrl };
+    const hasText = input.trim().length > 0;
+    const hasFile = attachment !== null;
+    if (!hasText && !hasFile) return;
+
+    // Build user message content
+    let userContent = input.trim();
+    let fileName: string | undefined;
+    let imageUrl: string | undefined;
+    const imageFile = attachment?.kind === "image" ? attachment.file : null;
+    imageUrl        = attachment?.kind === "image" ? attachment.previewUrl : undefined;
+
+    if (attachment?.kind === "doc") {
+      fileName    = attachment.file.name;
+      const excerpt = attachment.extractedText.slice(0, 12000); // send up to 12k chars
+      userContent = userContent
+        ? `${userContent}\n\n[Document: ${fileName}]\n\n${excerpt}`
+        : `Please analyze this document — "${fileName}" — and respond to any questions about it.\n\n${excerpt}`;
+    }
+
+    if (!userContent) userContent = "Analyze this image for studying.";
+
+    const newUserMsg: Message = {
+      role: "user",
+      content: userContent,
+      imageUrl,
+      fileName: attachment?.kind === "doc" ? attachment.file.name : undefined,
+    };
     const newMessages: Message[] = [...messages, newUserMsg];
 
     setChats((prev) => prev.map((c) =>
       c.id === activeChatId ? {
         ...c,
-        title: c.title === "New Chat" ? userContent.slice(0, 28) + (userContent.length > 28 ? "…" : "") : c.title,
+        title: c.title === "New Chat"
+          ? (input.trim() || fileName || "Document").slice(0, 28) + "…"
+          : c.title,
         messages: newMessages,
       } : c
     ));
@@ -184,23 +277,23 @@ export default function Home() {
     setInput("");
     setLoading(true);
     if (inputRef.current) inputRef.current.style.height = "auto";
-
-    const imageFile = image;
-    setImage(null); setImagePreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    clearAttachment();
 
     try {
       const formData = new FormData();
+      // Strip imageUrl/fileName from messages sent to server (not needed server-side)
       formData.append("messages", JSON.stringify(newMessages.map(({ role, content }) => ({ role, content }))));
       formData.append("mode", mode);
       if (imageFile instanceof File) formData.append("image", imageFile);
 
-      const res  = await fetch("/api/chat", { method: "POST", body: formData });
-      const data = await res.json();
+      const res       = await fetch("/api/chat", { method: "POST", body: formData });
+      const data      = await res.json();
       const fullReply = data.reply || "No response returned.";
 
       setChats((prev) => prev.map((c) =>
-        c.id === activeChatId ? { ...c, messages: [...c.messages, { role: "assistant", content: "" }] } : c
+        c.id === activeChatId
+          ? { ...c, messages: [...c.messages, { role: "assistant", content: "" }] }
+          : c
       ));
 
       let typed = "";
@@ -244,8 +337,9 @@ export default function Home() {
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
-  const sortedChats  = [...chats].filter((c) => !c.archived).sort((a, b) => (a.pinned ? -1 : b.pinned ? 1 : 0));
+  const sortedChats   = [...chats].filter((c) => !c.archived).sort((a, b) => (a.pinned ? -1 : b.pinned ? 1 : 0));
   const archivedChats = chats.filter((c) => c.archived);
+  const canSend       = !loading && !extracting && (input.trim().length > 0 || attachment !== null);
 
   return (
     <main className="relative flex h-screen overflow-hidden bg-transparent text-white">
@@ -344,12 +438,12 @@ export default function Home() {
                 </button>
                 <div className="hidden group-hover:flex gap-1 mt-1.5">
                   {[
-                    { icon: <Pin size={10} />,     action: () => pinChat(chat.id) },
-                    { icon: <Archive size={10} />, action: () => archiveChat(chat.id) },
-                    { icon: <Star size={10} />,    action: () => highlightChat(chat.id) },
-                    { icon: <Pencil size={10} />,  action: () => renameChat(chat.id) },
+                    { icon: <Pin size={10} />,     fn: () => pinChat(chat.id) },
+                    { icon: <Archive size={10} />, fn: () => archiveChat(chat.id) },
+                    { icon: <Star size={10} />,    fn: () => highlightChat(chat.id) },
+                    { icon: <Pencil size={10} />,  fn: () => renameChat(chat.id) },
                   ].map((btn, i) => (
-                    <button key={i} onClick={btn.action} className="p-1 rounded hover:bg-white/10 text-gray-400">{btn.icon}</button>
+                    <button key={i} onClick={btn.fn} className="p-1 rounded hover:bg-white/10 text-gray-400">{btn.icon}</button>
                   ))}
                   <button onClick={() => deleteChat(chat.id)} className="p-1 rounded hover:bg-red-500/20 text-red-400"><Trash2 size={10} /></button>
                 </div>
@@ -390,7 +484,6 @@ export default function Home() {
               : TOOL_CONFIG.find((t) => t.id === activeTool)?.label || ""}
           </div>
 
-          {/* Mode pills */}
           {activeTool === "chat" && (
             <div className="flex gap-1 sm:gap-1.5 shrink-0">
               {(["quick", "deep", "research"] as Mode[]).map((m) => {
@@ -403,8 +496,7 @@ export default function Home() {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`rounded-full font-bold border transition-all
-                      px-2 py-1.5 text-sm md:px-3 md:text-[11px]
+                    className={`rounded-full font-bold border transition-all px-2 py-1.5 text-sm md:px-3 md:text-[11px]
                       ${mode === m
                         ? `${cfg.active} border-transparent text-white`
                         : "bg-transparent border-white/10 text-gray-400 hover:text-white hover:border-white/20"
@@ -444,7 +536,8 @@ export default function Home() {
                   </div>
 
                   <div className={`max-w-[85%] sm:max-w-[80%] flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                    {/* Image */}
+
+                    {/* Image attachment */}
                     {msg.role === "user" && msg.imageUrl && (
                       <div className="rounded-xl overflow-hidden border border-violet-500/30 shadow-lg">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -452,13 +545,30 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Document attachment chip */}
+                    {msg.role === "user" && msg.fileName && (
+                      <div className="flex items-center gap-2 px-3 py-2 bg-violet-600/20 border border-violet-500/30 rounded-xl text-xs text-violet-300">
+                        <FileText size={13} className="shrink-0" />
+                        <span className="truncate max-w-40 font-medium">{msg.fileName}</span>
+                      </div>
+                    )}
+
+                    {/* Bubble — show text content, but hide the injected doc text */}
                     <div className={`rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-lg transition-all
                       ${msg.role === "user"
                         ? "bg-violet-600 text-white rounded-tr-sm"
                         : "bg-black/40 border border-white/10 backdrop-blur-xl rounded-tl-sm"
                       }`}>
                       {msg.role === "user" ? (
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {/* Strip the injected doc content from display */}
+                          {msg.fileName
+                            ? (msg.content.includes(`[Document: ${msg.fileName}]`)
+                                ? msg.content.split(`[Document: ${msg.fileName}]`)[0].trim() || `Shared document: ${msg.fileName}`
+                                : msg.content.split(`Please analyze this document`)[0].trim() || `Shared: ${msg.fileName}`)
+                            : msg.content
+                          }
+                        </p>
                       ) : (
                         <ChatBubble role={msg.role} content={msg.content} darkMode={true} />
                       )}
@@ -500,7 +610,7 @@ export default function Home() {
 
             {/* INPUT AREA */}
             <div className="px-3 sm:px-5 pb-4 sm:pb-5 pt-2 sm:pt-3 backdrop-blur-xl bg-black/10 shrink-0">
-              {/* Quick prompts — horizontal scroll on mobile */}
+              {/* Quick prompts */}
               <div className="flex gap-2 mb-2 sm:mb-3 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
                 {QUICK_PROMPTS.map((p) => (
                   <button
@@ -511,41 +621,63 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Image preview thumbnail */}
-              {imagePreviewUrl && (
+              {/* Attachment preview */}
+              {(attachment || extracting) && (
                 <div className="mb-2 sm:mb-3 flex items-start gap-2 sm:gap-3">
-                  <div className="relative group/img">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imagePreviewUrl}
-                      alt="To send"
-                      className="h-16 sm:h-20 w-auto max-w-30 sm:max-w-40 rounded-xl object-cover border border-violet-500/40 shadow-md"
-                    />
-                    <button
-                      onClick={clearImage}
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center shadow-md hover:bg-red-400"
-                    >✕</button>
-                  </div>
-                  <div className="text-xs text-gray-400 self-end pb-1">
-                    <span className="text-cyan-400 font-medium truncate block max-w-30">{image?.name}</span>
-                    <span className="text-gray-500">Ready to send</span>
-                  </div>
+                  {extracting && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-400 animate-pulse">
+                      <FileText size={13} /> Reading document…
+                    </div>
+                  )}
+
+                  {attachment?.kind === "image" && (
+                    <div className="relative group/img">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={attachment.previewUrl}
+                        alt="To send"
+                        className="h-16 sm:h-20 w-auto max-w-30 sm:max-w-40 rounded-xl object-cover border border-violet-500/40 shadow-md"
+                      />
+                      <button onClick={clearAttachment}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center shadow-md hover:bg-red-400">✕</button>
+                    </div>
+                  )}
+
+                  {attachment?.kind === "doc" && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-violet-600/15 border border-violet-500/30 rounded-xl">
+                      <FileText size={14} className="text-violet-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-violet-300 truncate max-w-45">{attachment.file.name}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {attachment.extractedText.split(/\s+/).filter(Boolean).length.toLocaleString()} words · ready to discuss
+                        </p>
+                      </div>
+                      <button onClick={clearAttachment}
+                        className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors ml-1 shrink-0">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Input row */}
               <div className="flex items-end gap-2 sm:gap-3">
-                {/* Image upload */}
+                {/* Attach button — images + docs */}
                 <label className={`shrink-0 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all
-                  ${imagePreviewUrl
+                  ${attachment
                     ? "bg-violet-600/20 border-violet-500/50 text-violet-400"
                     : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-400 hover:text-white"
-                  }`}>
-                  <ImagePlus size={17} />
+                  }`}
+                  title="Attach image, PDF, or document"
+                >
+                  <Paperclip size={17} />
                   <input
                     ref={fileInputRef}
-                    type="file" accept="image/*" className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx,.txt"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
                   />
                 </label>
 
@@ -556,16 +688,22 @@ export default function Home() {
                     value={input}
                     onChange={(e) => { setInput(e.target.value); autoResize(e.target); }}
                     onKeyDown={handleKey}
-                    placeholder={imagePreviewUrl ? "Add a message… (optional)" : "Ask anything…"}
+                    placeholder={
+                      extracting ? "Reading document…"
+                      : attachment?.kind === "doc" ? `Ask anything about ${attachment.file.name}…`
+                      : attachment?.kind === "image" ? "Add a message about this image… (optional)"
+                      : "Ask anything… or attach a PDF / image"
+                    }
                     rows={1}
-                    className="w-full bg-transparent outline-none text-white placeholder:text-gray-500 text-sm resize-none leading-6 max-h-28"
+                    disabled={extracting}
+                    className="w-full bg-transparent outline-none text-white placeholder:text-gray-500 text-sm resize-none leading-6 max-h-28 disabled:opacity-50"
                   />
                 </div>
 
                 {/* Send */}
                 <button
                   onClick={sendMessage}
-                  disabled={loading || (!input.trim() && !image)}
+                  disabled={!canSend}
                   className="shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-linear-to-br from-violet-600 to-cyan-500 flex items-center justify-center shadow-lg transition-all hover:scale-105 disabled:opacity-40 disabled:scale-100"
                 >
                   <Send size={16} className="text-white sm:hidden" />

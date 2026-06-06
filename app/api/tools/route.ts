@@ -6,9 +6,9 @@ if (!process.env.GROQ_API_KEY) {
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-type ToolType = "flashcards" | "quiz" | "summarize" | "studyplan" | "note_action";
+type ToolType = "flashcards" | "quiz" | "summarize" | "studyplan" | "note_action" | "extract_document";
 
-const TOOL_PROMPTS: Record<ToolType, (payload: Record<string, string>) => string> = {
+const TOOL_PROMPTS: Record<string, (payload: Record<string, string>) => string> = {
   flashcards: ({ topic, count }) =>
     `Create exactly ${count} flashcards about: "${topic}"
 
@@ -59,12 +59,7 @@ List each concept on its own line. Do not add any intro or outro text.`,
     };
 
     const instruction = styles[style] ?? styles.concise;
-
-    return `${instruction}
-
-Text to summarize:
-
-${text}`;
+    return `${instruction}\n\nText to summarize:\n\n${text}`;
   },
 
   studyplan: ({ goal }) =>
@@ -97,7 +92,49 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { tool, payload } = body as { tool: ToolType; payload: Record<string, string> };
 
-    if (!tool || !TOOL_PROMPTS[tool]) {
+    if (!tool) {
+      return Response.json({ error: "No tool specified." }, { status: 400 });
+    }
+
+    // ── extract_document: vision model for scanned PDFs and images ──
+    if (tool === "extract_document") {
+      const { base64, mediaType, fileName } = payload;
+      if (!base64 || !mediaType) {
+        return Response.json({ error: "Missing base64 or mediaType." }, { status: 400 });
+      }
+
+      const isImage = mediaType.startsWith("image/");
+      const visionMediaType = isImage ? mediaType : "image/png";
+
+      const response = await groq.chat.completions.create({
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: `data:${visionMediaType};base64,${base64}` },
+              },
+              {
+                type: "text",
+                text: `This is ${isImage ? "an image" : `a scanned document called "${fileName}"`}. Extract and transcribe ALL visible text content. Return only the raw extracted text — no commentary, no preamble, no explanation.`,
+              },
+            ],
+          },
+        ],
+      });
+
+      const extracted = response.choices[0]?.message?.content?.trim() || "";
+      if (!extracted) {
+        return Response.json({ error: "Could not extract any text from the document." }, { status: 500 });
+      }
+      return Response.json({ text: extracted });
+    }
+
+    // ── All other tools ──
+    if (!TOOL_PROMPTS[tool]) {
       return Response.json({ error: "Invalid tool." }, { status: 400 });
     }
 
@@ -120,7 +157,7 @@ export async function POST(req: Request) {
 
     const text = response.choices[0]?.message?.content?.trim() || "";
 
-    const jsonTools: ToolType[] = ["flashcards", "quiz", "studyplan"];
+    const jsonTools = ["flashcards", "quiz", "studyplan"];
     if (jsonTools.includes(tool)) {
       try {
         const clean = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
