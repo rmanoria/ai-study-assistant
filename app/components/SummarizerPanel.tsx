@@ -528,7 +528,7 @@ export default function SummarizerPanel() {
         </div>
 
         {/* ── RIGHT: Output ── */}
-        <div className="flex flex-col flex-1 overflow-hidden md:w-1/2">
+        <div className="flex flex-col flex-1 min-h-0 md:w-1/2 overflow-y-auto">
           {loading && (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
               <div className="w-12 h-12 rounded-2xl bg-green-500/20 border border-green-500/30 flex items-center justify-center">
@@ -542,7 +542,7 @@ export default function SummarizerPanel() {
           )}
 
           {result && !loading && (
-            <div className="flex flex-col flex-1 overflow-hidden p-4 sm:p-6 gap-4">
+            <div className="flex flex-col p-4 sm:p-6 gap-4">
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-400" />
@@ -557,7 +557,7 @@ export default function SummarizerPanel() {
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scroll bg-white/2 border border-white/8 rounded-2xl p-4 sm:p-5">
+              <div className="w-full bg-white/2 border border-white/8 rounded-2xl p-4 sm:p-5">
                 <ChatBubble role="assistant" content={result} darkMode={true} />
               </div>
             </div>

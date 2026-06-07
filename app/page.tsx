@@ -441,18 +441,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* New Chat */}
-        <div className="px-4 py-3 shrink-0">
-          <button
-            onClick={newChat}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-semibold transition-all"
-          >
-            <Plus size={15} /> New Chat
-          </button>
-        </div>
-
         {/* Study Tools */}
-        <div className="px-4 pb-2 shrink-0">
+        <div className="px-4 py-3 pb-2 shrink-0 border-b border-white/8">
           <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-1.5">Study Tools</p>
           <div className="flex flex-col gap-0.5">
             {TOOL_CONFIG.map((t) => (
@@ -467,6 +457,16 @@ export default function Home() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* New Chat */}
+        <div className="px-4 py-3 shrink-0 border-b border-white/8">
+          <button
+            onClick={newChat}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-2.5 text-sm font-semibold transition-all"
+          >
+            <Plus size={15} /> New Chat
+          </button>
         </div>
 
         {/* Chat History */}
