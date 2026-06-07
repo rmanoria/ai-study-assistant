@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send, ImagePlus, Plus, MessageSquare, Trash2,
   Pencil, Pin, Archive, Star, Menu, X, FileText, Paperclip,
+  MoreVertical, Check,
 } from "lucide-react";
 
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -20,7 +21,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
-  fileName?: string;  // for PDF/doc attachments shown in bubble
+  fileName?: string;
 };
 type Chat = {
   id: string; title: string; messages: Message[];
@@ -29,7 +30,6 @@ type Chat = {
 type Tool = "chat" | "flashcards" | "quiz" | "notes" | "summarizer" | "planner";
 type Mode = "quick" | "deep" | "research";
 
-// Attachment can be image OR document
 type Attachment =
   | { kind: "image"; file: File; previewUrl: string }
   | { kind: "doc";   file: File; extractedText: string };
@@ -58,10 +58,10 @@ const QUICK_PROMPTS = [
 // ── PDF/DOCX text extraction ─────────────────────────────────
 async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (pdfjs.GlobalWorkerOptions as any).workerSrc = "";
   const ab  = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab) }).promise;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab), disableFontFace: true }).promise;
   const pages: string[] = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page    = await pdf.getPage(p);
@@ -81,7 +81,6 @@ async function extractDocText(file: File): Promise<string> {
   const n = file.name.toLowerCase();
   if (n.endsWith(".pdf"))  return extractPdfText(file);
   if (n.endsWith(".docx") || n.endsWith(".doc")) return extractDocxText(file);
-  // txt
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload  = (e) => res((e.target?.result as string) ?? "");
@@ -94,9 +93,65 @@ function isDocFile(file: File) {
   const n = file.name.toLowerCase();
   return n.endsWith(".pdf") || n.endsWith(".doc") || n.endsWith(".docx") || n.endsWith(".txt");
 }
+function isImageFile(file: File) { return file.type.startsWith("image/"); }
 
-function isImageFile(file: File) {
-  return file.type.startsWith("image/");
+// ── Chat context menu (mobile + desktop) ─────────────────────
+function ChatContextMenu({
+  chat, onClose, onPin, onArchive, onHighlight, onRename, onDelete,
+}: {
+  chat: Chat;
+  onClose: () => void;
+  onPin: () => void;
+  onArchive: () => void;
+  onHighlight: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [onClose]);
+
+  const items = [
+    { icon: <Pin size={13} />,     label: chat.pinned    ? "Unpin"     : "Pin",     fn: onPin,       color: "text-amber-400" },
+    { icon: <Archive size={13} />, label: chat.archived  ? "Unarchive" : "Archive", fn: onArchive,   color: "text-blue-400" },
+    { icon: <Star size={13} />,    label: chat.highlighted ? "Unhighlight" : "Highlight", fn: onHighlight, color: "text-yellow-400" },
+    { icon: <Pencil size={13} />,  label: "Rename",   fn: onRename,  color: "text-gray-300" },
+  ];
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-8 z-50 min-w-40 rounded-xl border border-white/10 bg-[#1a1a2e] shadow-2xl overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          onClick={() => { item.fn(); onClose(); }}
+          className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium hover:bg-white/8 transition-colors ${item.color}`}
+        >
+          {item.icon} {item.label}
+        </button>
+      ))}
+      <div className="h-px bg-white/8" />
+      <button
+        onClick={() => { onDelete(); onClose(); }}
+        className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+      >
+        <Trash2 size={13} /> Delete
+      </button>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -106,6 +161,7 @@ export default function Home() {
   const [activeChatId, setActiveChatId] = useState<string>("");
   const [activeTool, setActiveTool]     = useState<Tool>("chat");
   const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
 
   useEffect(() => {
     if (window.innerWidth >= 768) setSidebarOpen(true);
@@ -117,12 +173,13 @@ export default function Home() {
   const [extracting, setExtracting] = useState(false);
   const [mode, setMode]             = useState<Mode>("quick");
   const [autoScroll, setAutoScroll] = useState(true);
+  const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
+  const [expandedMsgIdx, setExpandedMsgIdx] = useState<number | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef         = useRef<HTMLTextAreaElement>(null);
   const fileInputRef     = useRef<HTMLInputElement>(null);
 
-  // Load chats
   useEffect(() => {
     const saved = localStorage.getItem("studyai-pro-chats");
     if (saved) {
@@ -152,7 +209,6 @@ export default function Home() {
     return () => el.removeEventListener("scroll", handler);
   }, []);
 
-  // Revoke image preview URLs on change
   useEffect(() => {
     return () => {
       if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
@@ -160,10 +216,8 @@ export default function Home() {
   }, [attachment]);
 
   async function handleFileSelect(file: File) {
-    // Revoke old preview if image
     if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
     setAttachment(null);
-
     if (isImageFile(file)) {
       setAttachment({ kind: "image", file, previewUrl: URL.createObjectURL(file) });
     } else if (isDocFile(file)) {
@@ -239,19 +293,16 @@ export default function Home() {
     const hasFile = attachment !== null;
     if (!hasText && !hasFile) return;
 
-    // Build user message content
     let userContent = input.trim();
-    let fileName: string | undefined;
     let imageUrl: string | undefined;
     const imageFile = attachment?.kind === "image" ? attachment.file : null;
     imageUrl        = attachment?.kind === "image" ? attachment.previewUrl : undefined;
 
     if (attachment?.kind === "doc") {
-      fileName    = attachment.file.name;
-      const excerpt = attachment.extractedText.slice(0, 12000); // send up to 12k chars
+      const excerpt = attachment.extractedText.slice(0, 12000);
       userContent = userContent
-        ? `${userContent}\n\n[Document: ${fileName}]\n\n${excerpt}`
-        : `Please analyze this document — "${fileName}" — and respond to any questions about it.\n\n${excerpt}`;
+        ? `${userContent}\n\n[Document: ${attachment.file.name}]\n\n${excerpt}`
+        : `Please analyze this document — "${attachment.file.name}" — and respond to any questions about it.\n\n${excerpt}`;
     }
 
     if (!userContent) userContent = "Analyze this image for studying.";
@@ -268,7 +319,7 @@ export default function Home() {
       c.id === activeChatId ? {
         ...c,
         title: c.title === "New Chat"
-          ? (input.trim() || fileName || "Document").slice(0, 28) + "…"
+          ? (input.trim() || attachment?.kind === "doc" ? attachment?.file.name ?? "Document" : "Document").slice(0, 28) + "…"
           : c.title,
         messages: newMessages,
       } : c
@@ -276,12 +327,12 @@ export default function Home() {
 
     setInput("");
     setLoading(true);
+    setExpandedMsgIdx(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
     clearAttachment();
 
     try {
       const formData = new FormData();
-      // Strip imageUrl/fileName from messages sent to server (not needed server-side)
       formData.append("messages", JSON.stringify(newMessages.map(({ role, content }) => ({ role, content }))));
       formData.append("mode", mode);
       if (imageFile instanceof File) formData.append("image", imageFile);
@@ -337,6 +388,12 @@ export default function Home() {
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
+  function copyMsg(content: string, idx: number) {
+    navigator.clipboard?.writeText(content);
+    setCopiedMsgIdx(idx);
+    setTimeout(() => setCopiedMsgIdx(null), 2000);
+  }
+
   const sortedChats   = [...chats].filter((c) => !c.archived).sort((a, b) => (a.pinned ? -1 : b.pinned ? 1 : 0));
   const archivedChats = chats.filter((c) => c.archived);
   const canSend       = !loading && !extracting && (input.trim().length > 0 || attachment !== null);
@@ -350,7 +407,7 @@ export default function Home() {
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* SIDEBAR */}
+      {/* ── SIDEBAR ── */}
       <aside className={`
         fixed md:relative z-50 h-full flex flex-col border-r border-white/8 backdrop-blur-2xl transition-transform duration-300
         w-72 md:w-64
@@ -419,34 +476,51 @@ export default function Home() {
             {sortedChats.map((chat) => (
               <div
                 key={chat.id}
-                className={`group rounded-xl p-2.5 transition-all cursor-pointer
+                className={`relative rounded-xl transition-all
                   ${activeChatId === chat.id && activeTool === "chat" ? "bg-violet-600/30 border border-violet-500/30" : "hover:bg-white/5"}
                   ${chat.highlighted ? "ring-1 ring-yellow-500/40" : ""}`}
               >
-                <button
-                  onClick={() => {
-                    setActiveChatId(chat.id); setActiveTool("chat");
-                    if (window.innerWidth < 768) setSidebarOpen(false);
-                  }}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-center gap-2">
+                {/* Main row: chat title + 3-dot menu button */}
+                <div className="flex items-center gap-1 px-2.5 py-2">
+                  <button
+                    onClick={() => {
+                      setActiveChatId(chat.id);
+                      setActiveTool("chat");
+                      setOpenMenuId(null);
+                      if (window.innerWidth < 768) setSidebarOpen(false);
+                    }}
+                    className="flex-1 flex items-center gap-2 text-left min-w-0"
+                  >
                     {chat.pinned && <Pin size={10} className="text-amber-400 shrink-0" />}
                     <MessageSquare size={12} className="text-gray-500 shrink-0" />
                     <span className="truncate text-xs text-gray-300">{chat.title}</span>
-                  </div>
-                </button>
-                <div className="hidden group-hover:flex gap-1 mt-1.5">
-                  {[
-                    { icon: <Pin size={10} />,     fn: () => pinChat(chat.id) },
-                    { icon: <Archive size={10} />, fn: () => archiveChat(chat.id) },
-                    { icon: <Star size={10} />,    fn: () => highlightChat(chat.id) },
-                    { icon: <Pencil size={10} />,  fn: () => renameChat(chat.id) },
-                  ].map((btn, i) => (
-                    <button key={i} onClick={btn.fn} className="p-1 rounded hover:bg-white/10 text-gray-400">{btn.icon}</button>
-                  ))}
-                  <button onClick={() => deleteChat(chat.id)} className="p-1 rounded hover:bg-red-500/20 text-red-400"><Trash2 size={10} /></button>
+                  </button>
+
+                  {/* ⋮ menu — always visible, works on mobile */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuId(openMenuId === chat.id ? null : chat.id);
+                    }}
+                    className="shrink-0 p-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/10 transition-colors"
+                    aria-label="Chat options"
+                  >
+                    <MoreVertical size={13} />
+                  </button>
                 </div>
+
+                {/* Dropdown context menu */}
+                {openMenuId === chat.id && (
+                  <ChatContextMenu
+                    chat={chat}
+                    onClose={() => setOpenMenuId(null)}
+                    onPin={() => pinChat(chat.id)}
+                    onArchive={() => archiveChat(chat.id)}
+                    onHighlight={() => highlightChat(chat.id)}
+                    onRename={() => renameChat(chat.id)}
+                    onDelete={() => deleteChat(chat.id)}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -455,10 +529,20 @@ export default function Home() {
             <div className="mt-3">
               <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-1.5">Archived</p>
               {archivedChats.map((chat) => (
-                <div key={chat.id} className="group flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5 cursor-pointer">
+                <div key={chat.id} className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5">
                   <Archive size={11} className="text-gray-600 shrink-0" />
                   <span className="flex-1 truncate text-xs text-gray-500">{chat.title}</span>
-                  <button onClick={() => archiveChat(chat.id)} className="hidden group-hover:block p-1 hover:bg-white/10 rounded text-xs text-gray-400">↩</button>
+                  {/* Unarchive always visible */}
+                  <button
+                    onClick={() => archiveChat(chat.id)}
+                    className="p-1 hover:bg-white/10 rounded text-xs text-gray-400 hover:text-white transition-colors"
+                    title="Unarchive"
+                  >↩</button>
+                  <button
+                    onClick={() => deleteChat(chat.id)}
+                    className="p-1 hover:bg-red-500/15 rounded text-red-500 hover:text-red-400 transition-colors"
+                    title="Delete"
+                  ><Trash2 size={11} /></button>
                 </div>
               ))}
             </div>
@@ -466,7 +550,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* MAIN */}
+      {/* ── MAIN ── */}
       <section className="relative flex flex-1 flex-col overflow-hidden min-w-0">
 
         {/* TOPBAR */}
@@ -525,10 +609,9 @@ export default function Home() {
         {/* CHAT VIEW */}
         {activeTool === "chat" && (
           <>
-            {/* Messages */}
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 sm:py-6 space-y-4">
               {messages.map((msg, i) => (
-                <div key={i} className={`flex gap-2 sm:gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""} group`}>
+                <div key={i} className={`flex gap-2 sm:gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                   {/* Avatar */}
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm shrink-0 mt-0.5
                     ${msg.role === "user" ? "bg-violet-600" : "bg-linear-to-br from-violet-500 to-cyan-500"}`}>
@@ -536,7 +619,6 @@ export default function Home() {
                   </div>
 
                   <div className={`max-w-[85%] sm:max-w-[80%] flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-
                     {/* Image attachment */}
                     {msg.role === "user" && msg.imageUrl && (
                       <div className="rounded-xl overflow-hidden border border-violet-500/30 shadow-lg">
@@ -545,7 +627,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Document attachment chip */}
+                    {/* Document chip */}
                     {msg.role === "user" && msg.fileName && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-violet-600/20 border border-violet-500/30 rounded-xl text-xs text-violet-300">
                         <FileText size={13} className="shrink-0" />
@@ -553,7 +635,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Bubble — show text content, but hide the injected doc text */}
+                    {/* Bubble */}
                     <div className={`rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-lg transition-all
                       ${msg.role === "user"
                         ? "bg-violet-600 text-white rounded-tr-sm"
@@ -561,7 +643,6 @@ export default function Home() {
                       }`}>
                       {msg.role === "user" ? (
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                          {/* Strip the injected doc content from display */}
                           {msg.fileName
                             ? (msg.content.includes(`[Document: ${msg.fileName}]`)
                                 ? msg.content.split(`[Document: ${msg.fileName}]`)[0].trim() || `Shared document: ${msg.fileName}`
@@ -574,24 +655,44 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Message actions */}
+                    {/* ── Message actions ──
+                        Desktop: show on hover via group-hover
+                        Mobile:  tap the "•••" button to toggle, always visible button  */}
                     {msg.role === "assistant" && (
-                      <div className="flex gap-1.5 sm:gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {/* Always-visible tap target on mobile */}
                         <button
-                          onClick={() => navigator.clipboard?.writeText(msg.content)}
-                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        >📋 Copy</button>
-                        <button
-                          onClick={() => setActiveTool("flashcards")}
-                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        >🃏 Flashcards</button>
-                        <button
-                          onClick={() => {
-                            localStorage.setItem("studyai-new-note", JSON.stringify({ title: "AI Response", body: msg.content }));
-                            setActiveTool("notes");
-                          }}
-                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
-                        >📝 Save</button>
+                          onClick={() => setExpandedMsgIdx(expandedMsgIdx === i ? null : i)}
+                          className="flex items-center gap-1 text-[10px] px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-500 hover:text-gray-300 transition-colors md:hidden"
+                        >
+                          <MoreVertical size={10} />
+                          Actions
+                        </button>
+
+                        {/* Actions — always visible on desktop (via opacity), toggled on mobile */}
+                        <div className={`flex gap-1.5 flex-wrap transition-all
+                          ${expandedMsgIdx === i ? "flex" : "hidden"} md:flex`}>
+                          <button
+                            onClick={() => copyMsg(msg.content, i)}
+                            className={`text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 border rounded-lg transition-colors
+                              ${copiedMsgIdx === i
+                                ? "bg-green-600/20 border-green-500/40 text-green-400"
+                                : "bg-white/5 border-white/10 text-gray-400 hover:text-white"}`}
+                          >
+                            {copiedMsgIdx === i ? <><Check size={10} className="inline mr-1" />Copied!</> : "📋 Copy"}
+                          </button>
+                          <button
+                            onClick={() => setActiveTool("flashcards")}
+                            className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                          >🃏 Flashcards</button>
+                          <button
+                            onClick={() => {
+                              localStorage.setItem("studyai-new-note", JSON.stringify({ title: "AI Response", body: msg.content }));
+                              setActiveTool("notes");
+                            }}
+                            className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                          >📝 Save</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -629,20 +730,15 @@ export default function Home() {
                       <FileText size={13} /> Reading document…
                     </div>
                   )}
-
                   {attachment?.kind === "image" && (
-                    <div className="relative group/img">
+                    <div className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={attachment.previewUrl}
-                        alt="To send"
-                        className="h-16 sm:h-20 w-auto max-w-30 sm:max-w-40 rounded-xl object-cover border border-violet-500/40 shadow-md"
-                      />
+                      <img src={attachment.previewUrl} alt="To send"
+                        className="h-16 sm:h-20 w-auto max-w-30 sm:max-w-40 rounded-xl object-cover border border-violet-500/40 shadow-md" />
                       <button onClick={clearAttachment}
                         className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center shadow-md hover:bg-red-400">✕</button>
                     </div>
                   )}
-
                   {attachment?.kind === "doc" && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-violet-600/15 border border-violet-500/30 rounded-xl">
                       <FileText size={14} className="text-violet-400 shrink-0" />
@@ -663,25 +759,16 @@ export default function Home() {
 
               {/* Input row */}
               <div className="flex items-end gap-2 sm:gap-3">
-                {/* Attach button — images + docs */}
                 <label className={`shrink-0 p-2.5 sm:p-3 border rounded-xl cursor-pointer transition-all
                   ${attachment
                     ? "bg-violet-600/20 border-violet-500/50 text-violet-400"
                     : "bg-white/5 hover:bg-white/10 border-white/10 text-gray-400 hover:text-white"
-                  }`}
-                  title="Attach image, PDF, or document"
-                >
+                  }`} title="Attach image, PDF, or document">
                   <Paperclip size={17} />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,.pdf,.doc,.docx,.txt"
-                    className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }} />
                 </label>
 
-                {/* Text input */}
                 <div className="flex-1 bg-white/5 border border-white/10 focus-within:border-violet-500/50 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-colors min-w-0">
                   <textarea
                     ref={inputRef}
@@ -700,7 +787,6 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Send */}
                 <button
                   onClick={sendMessage}
                   disabled={!canSend}

@@ -43,51 +43,124 @@ async function extractTxtText(file: File): Promise<string> {
   });
 }
 
-// Render PDF pages to canvas and return base64 images
-async function pdfToImages(file: File, maxPages = 5): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-  const numPages = Math.min(pdf.numPages, maxPages);
-  const images: string[] = [];
-
-  for (let p = 1; p <= numPages; p++) {
-    const page = await pdf.getPage(p);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await page.render({ canvasContext: ctx as CanvasRenderingContext2D, viewport, canvas }).promise;
-    // Get base64 without the data:image/png;base64, prefix
-    images.push(canvas.toDataURL("image/png").split(",")[1]);
-  }
-  return images;
+/** Convert file to base64 string (without data URI prefix) */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      resolve(result.split(",")[1] ?? "");
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 }
 
-// Try normal text extraction first
-async function extractPdfText(file: File): Promise<string> {
+/**
+ * CLIENT-SIDE PDF text extraction via pdfjs-dist.
+ * Uses workerSrc = "" to run in main thread — safe on all mobile browsers.
+ */
+async function extractPdfTextClient(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+  // Disable worker entirely — runs synchronously in main thread.
+  // This avoids the CDN/blob-worker failures on iOS Safari & mobile Chrome.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (pdfjs.GlobalWorkerOptions as any).workerSrc = "";
+
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+  const pdf = await pdfjs.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    // Prevent any network requests for CMaps / standard fonts on mobile
+    disableFontFace: true,
+    cMapUrl: undefined,
+    standardFontDataUrl: undefined,
+  }).promise;
+
   const pages: string[] = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    const text = content.items.map((item: unknown) => (item as { str?: string }).str ?? "").join(" ");
+    const text = content.items
+      .map((item: unknown) => (item as { str?: string }).str ?? "")
+      .join(" ");
     pages.push(text);
   }
   return pages.join("\n\n").trim();
 }
 
-// Send page images to AI vision via our API
+/**
+ * CLIENT-SIDE: Render PDF pages to canvas images then send to vision API.
+ * Also uses workerSrc = "" for mobile safety.
+ */
+async function pdfToImages(file: File, maxPages = 5): Promise<string[]> {
+  const pdfjs = await import("pdfjs-dist");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (pdfjs.GlobalWorkerOptions as any).workerSrc = "";
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    disableFontFace: true,
+    cMapUrl: undefined,
+    standardFontDataUrl: undefined,
+  }).promise;
+
+  const numPages = Math.min(pdf.numPages, maxPages);
+  const images: string[] = [];
+
+  for (let p = 1; p <= numPages; p++) {
+    try {
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+
+      await page.render({
+        canvasContext: ctx,
+        viewport,
+      } as Parameters<typeof page.render>[0]).promise;
+
+      const b64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+      if (b64) images.push(b64);
+    } catch {
+      // Skip unrenderable pages silently
+    }
+  }
+  return images;
+}
+
+/**
+ * SERVER-SIDE fallback: send raw PDF bytes to our API route for extraction.
+ * The API uses a server-side pdfjs (Node canvas) — bypasses all browser issues.
+ */
+async function extractPdfViaServer(
+  file: File,
+  onProgress?: (msg: string) => void
+): Promise<string> {
+  onProgress?.("Sending to server for extraction…");
+  const base64 = await fileToBase64(file);
+  const res = await fetch("/api/tools", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tool: "extract_document",
+      payload: {
+        base64,
+        mediaType: "application/pdf",
+        fileName: file.name,
+      },
+    }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return (data.text ?? "").trim();
+}
+
+/** Send page images to AI vision via our API */
 async function extractViaVision(
   images: string[],
   fileName: string,
@@ -104,7 +177,7 @@ async function extractViaVision(
         tool: "extract_document",
         payload: {
           base64: images[i],
-          mediaType: "image/png",
+          mediaType: "image/jpeg",
           fileName: `${fileName} page ${i + 1}`,
         },
       }),
@@ -117,14 +190,61 @@ async function extractViaVision(
   return allText.join("\n\n");
 }
 
-// Image file to base64
-async function imageToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve((e.target?.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+/**
+ * Full PDF extraction pipeline with multiple fallback layers:
+ * 1. Client-side text extraction (pdfjs, no worker)
+ * 2. If scanned → client-side canvas render → vision API
+ * 3. If canvas fails → server-side extraction fallback
+ * 4. If server returns little text → server sends to vision
+ */
+async function extractPdfWithFallbacks(
+  file: File,
+  onProgress: (msg: string) => void
+): Promise<string> {
+  // ── Layer 1: client-side text extraction ──
+  let text = "";
+  try {
+    onProgress("Extracting text from PDF…");
+    text = await extractPdfTextClient(file);
+  } catch (clientErr) {
+    console.warn("Client-side PDF text extraction failed:", clientErr);
+    // Jump straight to server fallback
+    text = "";
+  }
+
+  const hasText = text.replace(/\s/g, "").length >= 150;
+
+  if (hasText) return text;
+
+  // ── Layer 2: try client-side canvas → vision ──
+  let usedCanvas = false;
+  try {
+    onProgress("Scanned PDF detected — rendering pages…");
+    const images = await pdfToImages(file, 8);
+    if (images.length > 0) {
+      usedCanvas = true;
+      text = await extractViaVision(images, file.name, onProgress);
+      if (text.replace(/\s/g, "").length >= 50) return text;
+    }
+  } catch (canvasErr) {
+    console.warn("Canvas render failed (mobile?):", canvasErr);
+  }
+
+  // ── Layer 3: server-side fallback ──
+  if (!usedCanvas || text.replace(/\s/g, "").length < 50) {
+    try {
+      onProgress("Using server-side extraction…");
+      text = await extractPdfViaServer(file, onProgress);
+      if (text.replace(/\s/g, "").length >= 50) return text;
+    } catch (serverErr) {
+      console.warn("Server-side PDF extraction failed:", serverErr);
+    }
+  }
+
+  // ── Layer 4: nothing worked ──
+  throw new Error(
+    "Could not extract text from this PDF. It may be password-protected or heavily corrupted."
+  );
 }
 
 export default function SummarizerPanel() {
@@ -146,10 +266,6 @@ export default function SummarizerPanel() {
     return null;
   }
 
-  function setStatus(msg: string) {
-    setFileState((prev) => prev ? { ...prev, statusMsg: msg } : prev);
-  }
-
   async function processFile(file: File) {
     const type = getFileType(file);
     if (!type) { alert("Please upload a PDF, DOCX, TXT, or image file."); return; }
@@ -162,12 +278,15 @@ export default function SummarizerPanel() {
     setInput("");
     setResult("");
 
+    const setStatus = (msg: string) =>
+      setFileState((p) => p ? { ...p, statusMsg: msg } : p);
+
     try {
       let text = "";
 
       if (type === "image") {
-        setFileState((p) => p ? { ...p, statusMsg: "Analyzing image with AI vision…" } : p);
-        const base64 = await imageToBase64(file);
+        setStatus("Analyzing image with AI vision…");
+        const base64 = await fileToBase64(file);
         const res = await fetch("/api/tools", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -181,22 +300,10 @@ export default function SummarizerPanel() {
         text = data.text;
 
       } else if (type === "pdf") {
-        // Try normal text extraction first
-        setFileState((p) => p ? { ...p, statusMsg: "Extracting text from PDF…" } : p);
-        text = await extractPdfText(file);
-
-        // If little/no text found, it's scanned — render pages as images and use vision
-        if (text.replace(/\s/g, "").length < 150) {
-          setFileState((p) => p ? { ...p, statusMsg: "Scanned PDF detected — rendering pages…" } : p);
-          const images = await pdfToImages(file, 8);
-          if (images.length === 0) throw new Error("Could not render PDF pages.");
-          text = await extractViaVision(images, file.name, (msg) => {
-            setFileState((p) => p ? { ...p, statusMsg: msg } : p);
-          });
-        }
+        text = await extractPdfWithFallbacks(file, setStatus);
 
       } else if (type === "docx") {
-        setFileState((p) => p ? { ...p, statusMsg: "Extracting text from Word document…" } : p);
+        setStatus("Extracting text from Word document…");
         text = await extractDocxText(file);
 
       } else if (type === "txt") {
