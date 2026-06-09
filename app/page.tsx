@@ -3,7 +3,7 @@
 import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Send, ImagePlus, Plus, MessageSquare, Trash2,
+  Send, Plus, MessageSquare, Trash2,
   Pencil, Pin, Archive, Star, Menu, X, FileText, Paperclip,
   MoreVertical, Check,
 } from "lucide-react";
@@ -28,7 +28,7 @@ type Chat = {
   pinned?: boolean; archived?: boolean; highlighted?: boolean;
 };
 type Tool = "chat" | "flashcards" | "quiz" | "notes" | "summarizer" | "planner";
-type Mode = "quick" | "deep" | "research";
+type Mode = "quick" | "deep" | "research" | "socratic";
 
 type Attachment =
   | { kind: "image"; file: File; previewUrl: string }
@@ -36,10 +36,10 @@ type Attachment =
 
 const TOOL_CONFIG: { id: Tool; emoji: string; label: string }[] = [
   { id: "flashcards", emoji: "🃏", label: "Flashcards" },
-  { id: "quiz",       emoji: "🧠", label: "Quiz" },
-  { id: "notes",      emoji: "📝", label: "Notes" },
+  { id: "quiz",       emoji: "🧠", label: "Quiz"       },
+  { id: "notes",      emoji: "📝", label: "Notes"      },
   { id: "summarizer", emoji: "⚡", label: "Summarizer" },
-  { id: "planner",    emoji: "📅", label: "Planner" },
+  { id: "planner",    emoji: "📅", label: "Planner"    },
 ];
 
 const STARTERS: Message[] = [{
@@ -55,7 +55,7 @@ const QUICK_PROMPTS = [
   "Quiz me",
 ];
 
-// ── PDF/DOCX text extraction ─────────────────────────────────
+// ── PDF/DOCX text extraction ──────────────────────────────────
 async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,8 +79,8 @@ async function extractDocxText(file: File): Promise<string> {
 
 async function extractDocText(file: File): Promise<string> {
   const n = file.name.toLowerCase();
-  if (n.endsWith(".pdf"))  return extractPdfText(file);
-  if (n.endsWith(".docx") || n.endsWith(".doc")) return extractDocxText(file);
+  if (n.endsWith(".pdf"))                          return extractPdfText(file);
+  if (n.endsWith(".docx") || n.endsWith(".doc"))  return extractDocxText(file);
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload  = (e) => res((e.target?.result as string) ?? "");
@@ -95,23 +95,29 @@ function isDocFile(file: File) {
 }
 function isImageFile(file: File) { return file.type.startsWith("image/"); }
 
-// ── Chat context menu (mobile + desktop) ─────────────────────
-function ChatContextMenu({
-  chat, onClose, onPin, onArchive, onHighlight, onRename, onDelete,
+// ── Swipeable chat row ────────────────────────────────────────
+function SwipeableChatRow({
+  chat, isActive, onSelect, onPin, onArchive, onHighlight, onRename, onDelete,
+  menuOpen, onMenuToggle, onMenuClose,
 }: {
-  chat: Chat;
-  onClose: () => void;
-  onPin: () => void;
-  onArchive: () => void;
-  onHighlight: () => void;
-  onRename: () => void;
-  onDelete: () => void;
+  chat: Chat; isActive: boolean;
+  onSelect: () => void; onPin: () => void; onArchive: () => void;
+  onHighlight: () => void; onRename: () => void; onDelete: () => void;
+  menuOpen: boolean; onMenuToggle: () => void; onMenuClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const rowRef    = useRef<HTMLDivElement>(null);
+  const startX    = useRef<number | null>(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const REVEAL    = 152; // px to reveal action strip
 
+  // Close swipe when menu closes from outside
+  useEffect(() => { if (!menuOpen) { setSwipeX(0); } }, [menuOpen]);
+
+  // Close on outside click
   useEffect(() => {
+    if (!menuOpen) return;
     function handler(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (rowRef.current && !rowRef.current.contains(e.target as Node)) onMenuClose();
     }
     document.addEventListener("mousedown", handler);
     document.addEventListener("touchstart", handler);
@@ -119,37 +125,93 @@ function ChatContextMenu({
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("touchstart", handler);
     };
-  }, [onClose]);
+  }, [menuOpen, onMenuClose]);
 
-  const items = [
-    { icon: <Pin size={13} />,     label: chat.pinned    ? "Unpin"     : "Pin",     fn: onPin,       color: "text-amber-400" },
-    { icon: <Archive size={13} />, label: chat.archived  ? "Unarchive" : "Archive", fn: onArchive,   color: "text-blue-400" },
-    { icon: <Star size={13} />,    label: chat.highlighted ? "Unhighlight" : "Highlight", fn: onHighlight, color: "text-yellow-400" },
-    { icon: <Pencil size={13} />,  label: "Rename",   fn: onRename,  color: "text-gray-300" },
+  function onTouchStart(e: React.TouchEvent) { startX.current = e.touches[0].clientX; }
+  function onTouchMove(e: React.TouchEvent) {
+    if (startX.current === null) return;
+    const dx = startX.current - e.touches[0].clientX;
+    if (dx > 0) setSwipeX(Math.min(dx, REVEAL));
+  }
+  function onTouchEnd() {
+    if (swipeX > 60) { setSwipeX(REVEAL); onMenuToggle(); }
+    else { setSwipeX(0); onMenuClose(); }
+    startX.current = null;
+  }
+
+  const actions = [
+    { icon: <Pin size={11} />,     label: chat.pinned      ? "Unpin"       : "Pin",       color: "text-amber-400  hover:bg-amber-500/10",  fn: onPin },
+    { icon: <Archive size={11} />, label: chat.archived    ? "Unarchive"   : "Archive",   color: "text-blue-400   hover:bg-blue-500/10",    fn: onArchive },
+    { icon: <Star size={11} />,    label: chat.highlighted ? "Unstar"      : "⭐ Star",    color: "text-yellow-400 hover:bg-yellow-500/10",  fn: onHighlight },
+    { icon: <Pencil size={11} />,  label: "Rename",                                        color: "text-gray-300   hover:bg-white/8",         fn: onRename },
+    { icon: <Trash2 size={11} />,  label: "Delete",                                        color: "text-red-400    hover:bg-red-500/10",      fn: onDelete },
   ];
 
   return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-8 z-50 min-w-40 rounded-xl border border-white/10 bg-[#1a1a2e] shadow-2xl overflow-hidden"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((item, i) => (
-        <button
-          key={i}
-          onClick={() => { item.fn(); onClose(); }}
-          className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium hover:bg-white/8 transition-colors ${item.color}`}
-        >
-          {item.icon} {item.label}
-        </button>
-      ))}
-      <div className="h-px bg-white/8" />
-      <button
-        onClick={() => { onDelete(); onClose(); }}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+    <div ref={rowRef} className="relative overflow-hidden rounded-xl mb-0.5">
+      {/* ── Action strip (swipe / ⋮ dropdown) ── */}
+      <div
+        className="absolute right-0 top-0 bottom-0 flex items-stretch z-10 transition-opacity duration-150"
+        style={{ opacity: swipeX > 8 || menuOpen ? 1 : 0, pointerEvents: swipeX > 8 || menuOpen ? "auto" : "none" }}
       >
-        <Trash2 size={13} /> Delete
-      </button>
+        {/* Vertical mini strip revealed by swipe on mobile */}
+        <div className="flex items-stretch">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={() => { a.fn(); onMenuClose(); setSwipeX(0); }}
+              className={`flex flex-col items-center justify-center gap-0.5 w-8 text-[9px] font-bold border-l border-white/5 transition-colors ${a.color}`}
+              style={{ display: swipeX > 8 ? "flex" : "none" }}
+            >
+              {a.icon}
+              <span className="leading-none">{a.label.replace("⭐ ", "").slice(0, 7)}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Desktop dropdown */}
+        {menuOpen && (
+          <div className="absolute right-0 top-8 z-50 min-w-40 rounded-xl border border-white/10 bg-[#0f0f1e] shadow-2xl overflow-hidden">
+            {actions.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => { a.fn(); onMenuClose(); setSwipeX(0); }}
+                className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium transition-colors ${a.color} ${i < actions.length - 1 ? "border-b border-white/5" : ""}`}
+              >
+                {a.icon} {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Chat row ── */}
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ transform: `translateX(-${swipeX}px)`, transition: startX.current ? "none" : "transform 0.25s ease" }}
+        className={`flex items-center gap-1 px-2.5 py-2 rounded-xl transition-colors cursor-pointer select-none
+          ${isActive ? "bg-violet-600/30 border border-violet-500/30" : "hover:bg-white/5 border border-transparent"}
+          ${chat.highlighted ? "ring-1 ring-yellow-500/40" : ""}`}
+      >
+        <button
+          onClick={onSelect}
+          className="flex-1 flex items-center gap-2 text-left min-w-0"
+        >
+          {chat.pinned && <Pin size={9} className="text-amber-400 shrink-0" />}
+          <MessageSquare size={11} className="text-gray-500 shrink-0" />
+          <span className="truncate text-xs text-gray-300 leading-tight">{chat.title}</span>
+        </button>
+
+        {/* ⋮ — desktop menu trigger */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onMenuToggle(); }}
+          className="shrink-0 p-1 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/10 transition-colors"
+        >
+          <MoreVertical size={12} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -162,17 +224,18 @@ export default function Home() {
   const [activeTool, setActiveTool]     = useState<Tool>("chat");
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (window.innerWidth >= 768) setSidebarOpen(true);
   }, []);
 
-  const [input, setInput]           = useState("");
-  const [loading, setLoading]       = useState(false);
-  const [attachment, setAttachment] = useState<Attachment | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [mode, setMode]             = useState<Mode>("quick");
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [input, setInput]               = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [attachment, setAttachment]     = useState<Attachment | null>(null);
+  const [extracting, setExtracting]     = useState(false);
+  const [mode, setMode]                 = useState<Mode>("quick");
+  const [autoScroll, setAutoScroll]     = useState(true);
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
   const [expandedMsgIdx, setExpandedMsgIdx] = useState<number | null>(null);
 
@@ -180,6 +243,7 @@ export default function Home() {
   const inputRef         = useRef<HTMLTextAreaElement>(null);
   const fileInputRef     = useRef<HTMLInputElement>(null);
 
+  // ── Load chats from localStorage ──
   useEffect(() => {
     const saved = localStorage.getItem("studyai-pro-chats");
     if (saved) {
@@ -215,6 +279,7 @@ export default function Home() {
     };
   }, [attachment]);
 
+  // ── File handling ──
   async function handleFileSelect(file: File) {
     if (attachment?.kind === "image") URL.revokeObjectURL(attachment.previewUrl);
     setAttachment(null);
@@ -241,6 +306,7 @@ export default function Home() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  // ── Chat management ──
   function createChatObj(): Chat {
     return { id: Date.now().toString(), title: "New Chat", messages: [...STARTERS] };
   }
@@ -250,6 +316,7 @@ export default function Home() {
     setChats((prev) => [chat, ...prev]);
     setActiveChatId(chat.id);
     setActiveTool("chat");
+    setOpenMenuId(null);
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
 
@@ -257,27 +324,24 @@ export default function Home() {
     setChats((prev) => {
       const updated = prev.filter((c) => c.id !== id);
       if (activeChatId === id && updated.length > 0) setActiveChatId(updated[0].id);
+      if (updated.length === 0) {
+        const fallback = createChatObj();
+        setActiveChatId(fallback.id);
+        return [fallback];
+      }
       return updated;
     });
   }
 
   function renameChat(id: string) {
     const t = prompt("Rename chat:");
-    if (!t) return;
-    setChats((prev) => prev.map((c) => c.id === id ? { ...c, title: t } : c));
+    if (!t?.trim()) return;
+    setChats((prev) => prev.map((c) => c.id === id ? { ...c, title: t.trim() } : c));
   }
 
-  function pinChat(id: string) {
-    setChats((prev) => prev.map((c) => c.id === id ? { ...c, pinned: !c.pinned } : c));
-  }
-
-  function archiveChat(id: string) {
-    setChats((prev) => prev.map((c) => c.id === id ? { ...c, archived: !c.archived } : c));
-  }
-
-  function highlightChat(id: string) {
-    setChats((prev) => prev.map((c) => c.id === id ? { ...c, highlighted: !c.highlighted } : c));
-  }
+  function pinChat(id: string)       { setChats((prev) => prev.map((c) => c.id === id ? { ...c, pinned:      !c.pinned      } : c)); }
+  function archiveChat(id: string)   { setChats((prev) => prev.map((c) => c.id === id ? { ...c, archived:    !c.archived    } : c)); }
+  function highlightChat(id: string) { setChats((prev) => prev.map((c) => c.id === id ? { ...c, highlighted: !c.highlighted } : c)); }
 
   const currentChat = chats.find((c) => c.id === activeChatId);
   const messages    = currentChat?.messages || [];
@@ -288,6 +352,7 @@ export default function Home() {
     inputRef.current?.focus();
   }, []);
 
+  // ── Send message ──
   async function sendMessage() {
     const hasText = input.trim().length > 0;
     const hasFile = attachment !== null;
@@ -319,7 +384,7 @@ export default function Home() {
       c.id === activeChatId ? {
         ...c,
         title: c.title === "New Chat"
-          ? (input.trim() || attachment?.kind === "doc" ? attachment?.file.name ?? "Document" : "Document").slice(0, 28) + "…"
+          ? (input.trim() || (attachment?.kind === "doc" ? attachment.file.name : "Document")).slice(0, 30) + "…"
           : c.title,
         messages: newMessages,
       } : c
@@ -341,12 +406,14 @@ export default function Home() {
       const data      = await res.json();
       const fullReply = data.reply || "No response returned.";
 
+      // Start with empty assistant bubble
       setChats((prev) => prev.map((c) =>
         c.id === activeChatId
           ? { ...c, messages: [...c.messages, { role: "assistant", content: "" }] }
           : c
       ));
 
+      // Stream-type the response
       let typed = "";
       for (let i = 0; i < fullReply.length; i++) {
         typed += fullReply[i];
@@ -362,6 +429,7 @@ export default function Home() {
         }
       }
 
+      // Final full message
       setChats((prev) => prev.map((c) => {
         if (c.id !== activeChatId) return c;
         const msgs = [...c.messages];
@@ -398,6 +466,13 @@ export default function Home() {
   const archivedChats = chats.filter((c) => c.archived);
   const canSend       = !loading && !extracting && (input.trim().length > 0 || attachment !== null);
 
+  const MODE_CONFIG = {
+    quick:    { label: "⚡ Quick",    icon: "⚡", color: "bg-violet-600",  desc: "Concise" },
+    deep:     { label: "🧠 Deep",     icon: "🧠", color: "bg-purple-700",  desc: "Thorough" },
+    research: { label: "🔬 Research", icon: "🔬", color: "bg-emerald-700", desc: "Scholarly" },
+    socratic: { label: "💭 Socratic", icon: "💭", color: "bg-rose-700",    desc: "Guided" },
+  } as const;
+
   return (
     <main className="relative flex h-screen overflow-hidden bg-transparent text-white">
       <AnimatedBackground />
@@ -407,13 +482,16 @@ export default function Home() {
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* ── SIDEBAR ── */}
+      {/* ══════════════════════════════════════
+          SIDEBAR
+      ══════════════════════════════════════ */}
       <aside className={`
         fixed md:relative z-50 h-full flex flex-col border-r border-white/8 backdrop-blur-2xl transition-transform duration-300
         w-72 md:w-64
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:-translate-x-full md:w-0 md:overflow-hidden"}
-        bg-black/90 md:bg-black/50
+        bg-black/90 md:bg-black/60
       `}>
+
         {/* Logo */}
         <div className="px-5 py-4 border-b border-white/8 shrink-0">
           <h1 className="text-lg font-black tracking-tight bg-linear-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
@@ -469,80 +547,56 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Chat History */}
-        <div className="flex-1 overflow-y-auto px-4 py-2">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-1.5">Chats</p>
-          <div className="flex flex-col gap-0.5">
-            {sortedChats.map((chat) => (
-              <div
-                key={chat.id}
-                className={`relative rounded-xl transition-all
-                  ${activeChatId === chat.id && activeTool === "chat" ? "bg-violet-600/30 border border-violet-500/30" : "hover:bg-white/5"}
-                  ${chat.highlighted ? "ring-1 ring-yellow-500/40" : ""}`}
-              >
-                {/* Main row: chat title + 3-dot menu button */}
-                <div className="flex items-center gap-1 px-2.5 py-2">
-                  <button
-                    onClick={() => {
-                      setActiveChatId(chat.id);
-                      setActiveTool("chat");
-                      setOpenMenuId(null);
-                      if (window.innerWidth < 768) setSidebarOpen(false);
-                    }}
-                    className="flex-1 flex items-center gap-2 text-left min-w-0"
-                  >
-                    {chat.pinned && <Pin size={10} className="text-amber-400 shrink-0" />}
-                    <MessageSquare size={12} className="text-gray-500 shrink-0" />
-                    <span className="truncate text-xs text-gray-300">{chat.title}</span>
-                  </button>
-
-                  {/* ⋮ menu — always visible, works on mobile */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenuId(openMenuId === chat.id ? null : chat.id);
-                    }}
-                    className="shrink-0 p-1 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/10 transition-colors"
-                    aria-label="Chat options"
-                  >
-                    <MoreVertical size={13} />
-                  </button>
-                </div>
-
-                {/* Dropdown context menu */}
-                {openMenuId === chat.id && (
-                  <ChatContextMenu
-                    chat={chat}
-                    onClose={() => setOpenMenuId(null)}
-                    onPin={() => pinChat(chat.id)}
-                    onArchive={() => archiveChat(chat.id)}
-                    onHighlight={() => highlightChat(chat.id)}
-                    onRename={() => renameChat(chat.id)}
-                    onDelete={() => deleteChat(chat.id)}
-                  />
-                )}
-              </div>
-            ))}
+        {/* ── Chat History ── */}
+        <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-1">
+          {/* Active chats header */}
+          <div className="flex items-center justify-between py-1 sticky top-0 bg-transparent">
+            <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600">
+              Chats <span className="text-gray-700 normal-case font-normal">({sortedChats.length})</span>
+            </p>
           </div>
 
+          {sortedChats.length === 0 && (
+            <p className="text-xs text-gray-600 px-1 py-2">No chats yet — start one above.</p>
+          )}
+
+          {sortedChats.map((chat) => (
+            <SwipeableChatRow
+              key={chat.id}
+              chat={chat}
+              isActive={activeChatId === chat.id && activeTool === "chat"}
+              onSelect={() => { setActiveChatId(chat.id); setActiveTool("chat"); setOpenMenuId(null); if (window.innerWidth < 768) setSidebarOpen(false); }}
+              onPin={() => pinChat(chat.id)}
+              onArchive={() => archiveChat(chat.id)}
+              onHighlight={() => highlightChat(chat.id)}
+              onRename={() => renameChat(chat.id)}
+              onDelete={() => deleteChat(chat.id)}
+              menuOpen={openMenuId === chat.id}
+              onMenuToggle={() => setOpenMenuId(openMenuId === chat.id ? null : chat.id)}
+              onMenuClose={() => setOpenMenuId(null)}
+            />
+          ))}
+
+          {/* Archived section */}
           {archivedChats.length > 0 && (
             <div className="mt-3">
-              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-1.5">Archived</p>
-              {archivedChats.map((chat) => (
-                <div key={chat.id} className="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-white/5">
-                  <Archive size={11} className="text-gray-600 shrink-0" />
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold text-gray-600 hover:text-gray-400 transition-colors mb-1"
+              >
+                <Archive size={10} />
+                Archived ({archivedChats.length})
+                <span className="ml-0.5">{showArchived ? "▲" : "▼"}</span>
+              </button>
+              {showArchived && archivedChats.map((chat) => (
+                <div key={chat.id} className="flex items-center gap-2 px-2.5 py-2 rounded-xl hover:bg-white/5 mb-0.5">
+                  <Archive size={10} className="text-gray-600 shrink-0" />
                   <span className="flex-1 truncate text-xs text-gray-500">{chat.title}</span>
-                  {/* Unarchive always visible */}
-                  <button
-                    onClick={() => archiveChat(chat.id)}
-                    className="p-1 hover:bg-white/10 rounded text-xs text-gray-400 hover:text-white transition-colors"
-                    title="Unarchive"
-                  >↩</button>
-                  <button
-                    onClick={() => deleteChat(chat.id)}
-                    className="p-1 hover:bg-red-500/15 rounded text-red-500 hover:text-red-400 transition-colors"
-                    title="Delete"
-                  ><Trash2 size={11} /></button>
+                  <button onClick={() => archiveChat(chat.id)} title="Unarchive"
+                    className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors text-xs">↩</button>
+                  <button onClick={() => deleteChat(chat.id)} title="Delete"
+                    className="p-1 hover:bg-red-500/15 rounded text-red-500 hover:text-red-400 transition-colors">
+                    <Trash2 size={11} /></button>
                 </div>
               ))}
             </div>
@@ -550,7 +604,9 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* ── MAIN ── */}
+      {/* ══════════════════════════════════════
+          MAIN
+      ══════════════════════════════════════ */}
       <section className="relative flex flex-1 flex-col overflow-hidden min-w-0">
 
         {/* TOPBAR */}
@@ -569,20 +625,17 @@ export default function Home() {
           </div>
 
           {activeTool === "chat" && (
-            <div className="flex gap-1 sm:gap-1.5 shrink-0">
-              {(["quick", "deep", "research"] as Mode[]).map((m) => {
-                const cfg = {
-                  quick:    { label: "⚡ Quick",    icon: "⚡", active: "bg-violet-600" },
-                  deep:     { label: "🧠 Deep",     icon: "🧠", active: "bg-purple-700" },
-                  research: { label: "🔬 Research", icon: "🔬", active: "bg-green-700" },
-                }[m];
+            <div className="flex gap-1 sm:gap-1.5 shrink-0 flex-wrap justify-end">
+              {(Object.keys(MODE_CONFIG) as Mode[]).map((m) => {
+                const cfg = MODE_CONFIG[m];
                 return (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
+                    title={cfg.desc}
                     className={`rounded-full font-bold border transition-all px-2 py-1.5 text-sm md:px-3 md:text-[11px]
                       ${mode === m
-                        ? `${cfg.active} border-transparent text-white`
+                        ? `${cfg.color} border-transparent text-white shadow-md`
                         : "bg-transparent border-white/10 text-gray-400 hover:text-white hover:border-white/20"
                       }`}
                   >
@@ -619,7 +672,7 @@ export default function Home() {
                   </div>
 
                   <div className={`max-w-[85%] sm:max-w-[80%] flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                    {/* Image attachment */}
+                    {/* Image */}
                     {msg.role === "user" && msg.imageUrl && (
                       <div className="rounded-xl overflow-hidden border border-violet-500/30 shadow-lg">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -627,7 +680,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* Document chip */}
+                    {/* Doc chip */}
                     {msg.role === "user" && msg.fileName && (
                       <div className="flex items-center gap-2 px-3 py-2 bg-violet-600/20 border border-violet-500/30 rounded-xl text-xs text-violet-300">
                         <FileText size={13} className="shrink-0" />
@@ -636,42 +689,35 @@ export default function Home() {
                     )}
 
                     {/* Bubble */}
-                    <div className={`rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-lg transition-all
+                    <div className={`rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-lg
                       ${msg.role === "user"
                         ? "bg-violet-600 text-white rounded-tr-sm"
-                        : "bg-black/40 border border-white/10 backdrop-blur-xl rounded-tl-sm"
-                      }`}>
+                        : "bg-black/40 border border-white/10 backdrop-blur-xl rounded-tl-sm"}`}>
                       {msg.role === "user" ? (
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">
                           {msg.fileName
                             ? (msg.content.includes(`[Document: ${msg.fileName}]`)
                                 ? msg.content.split(`[Document: ${msg.fileName}]`)[0].trim() || `Shared document: ${msg.fileName}`
-                                : msg.content.split(`Please analyze this document`)[0].trim() || `Shared: ${msg.fileName}`)
-                            : msg.content
-                          }
+                                : msg.content.split("Please analyze this document")[0].trim() || `Shared: ${msg.fileName}`)
+                            : msg.content}
                         </p>
                       ) : (
                         <ChatBubble role={msg.role} content={msg.content} darkMode={true} />
                       )}
                     </div>
 
-                    {/* ── Message actions ──
-                        Desktop: show on hover via group-hover
-                        Mobile:  tap the "•••" button to toggle, always visible button  */}
+                    {/* Message actions */}
                     {msg.role === "assistant" && (
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        {/* Always-visible tap target on mobile */}
+                        {/* Mobile toggle */}
                         <button
                           onClick={() => setExpandedMsgIdx(expandedMsgIdx === i ? null : i)}
                           className="flex items-center gap-1 text-[10px] px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-gray-500 hover:text-gray-300 transition-colors md:hidden"
                         >
-                          <MoreVertical size={10} />
-                          Actions
+                          <MoreVertical size={10} /> Actions
                         </button>
 
-                        {/* Actions — always visible on desktop (via opacity), toggled on mobile */}
-                        <div className={`flex gap-1.5 flex-wrap transition-all
-                          ${expandedMsgIdx === i ? "flex" : "hidden"} md:flex`}>
+                        <div className={`flex gap-1.5 flex-wrap transition-all ${expandedMsgIdx === i ? "flex" : "hidden"} md:flex`}>
                           <button
                             onClick={() => copyMsg(msg.content, i)}
                             className={`text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 border rounded-lg transition-colors
@@ -777,7 +823,7 @@ export default function Home() {
                     onKeyDown={handleKey}
                     placeholder={
                       extracting ? "Reading document…"
-                      : attachment?.kind === "doc" ? `Ask anything about ${attachment.file.name}…`
+                      : attachment?.kind === "doc"   ? `Ask anything about ${attachment.file.name}…`
                       : attachment?.kind === "image" ? "Add a message about this image… (optional)"
                       : "Ask anything… or attach a PDF / image"
                     }
