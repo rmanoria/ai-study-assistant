@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send, Plus, MessageSquare, Trash2,
   Pencil, Pin, Archive, Star, Menu, X, FileText, Paperclip,
-  MoreVertical, Check,
+  MoreVertical, Check, Images,
 } from "lucide-react";
 
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -34,6 +34,16 @@ type Attachment =
   | { kind: "image"; file: File; previewUrl: string }
   | { kind: "doc";   file: File; extractedText: string };
 
+type MediaItem = {
+  id: string;
+  kind: "image" | "doc";
+  name: string;
+  dataUrl?: string;   // for images
+  chatId: string;
+  chatTitle: string;
+  sentAt: number;
+};
+
 const TOOL_CONFIG: { id: Tool; emoji: string; label: string }[] = [
   { id: "flashcards", emoji: "🃏", label: "Flashcards" },
   { id: "quiz",       emoji: "🧠", label: "Quiz"       },
@@ -59,7 +69,12 @@ const QUICK_PROMPTS = [
 async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (pdfjs.GlobalWorkerOptions as any).workerSrc = "";
+  try {
+    (pdfjs.GlobalWorkerOptions as any).workerSrc =
+      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+  } catch {
+    (pdfjs.GlobalWorkerOptions as any).workerSrc = "";
+  }
   const ab  = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(ab), disableFontFace: true }).promise;
   const pages: string[] = [];
@@ -148,10 +163,10 @@ function SwipeableChatRow({
   ];
 
   return (
-    <div ref={rowRef} className="relative overflow-hidden rounded-xl mb-0.5">
+    <div ref={rowRef} className="relative rounded-xl mb-0.5">
       {/* ── Action strip (swipe / ⋮ dropdown) ── */}
       <div
-        className="absolute right-0 top-0 bottom-0 flex items-stretch z-10 transition-opacity duration-150"
+        className="absolute right-0 top-0 bottom-0 flex items-stretch z-10 transition-opacity duration-150 overflow-hidden"
         style={{ opacity: swipeX > 8 || menuOpen ? 1 : 0, pointerEvents: swipeX > 8 || menuOpen ? "auto" : "none" }}
       >
         {/* Vertical mini strip revealed by swipe on mobile */}
@@ -169,21 +184,22 @@ function SwipeableChatRow({
           ))}
         </div>
 
-        {/* Desktop dropdown */}
-        {menuOpen && (
-          <div className="absolute right-0 top-8 z-50 min-w-40 rounded-xl border border-white/10 bg-[#0f0f1e] shadow-2xl overflow-hidden">
-            {actions.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => { a.fn(); onMenuClose(); setSwipeX(0); }}
-                className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium transition-colors ${a.color} ${i < actions.length - 1 ? "border-b border-white/5" : ""}`}
-              >
-                {a.icon} {a.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Desktop dropdown */}
+      {menuOpen && (
+        <div className="absolute right-0 top-8 z-50 min-w-40 rounded-xl border border-white/10 bg-[#0f0f1e] shadow-2xl overflow-hidden">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={() => { a.fn(); onMenuClose(); setSwipeX(0); }}
+              className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-xs font-medium transition-colors ${a.color} ${i < actions.length - 1 ? "border-b border-white/5" : ""}`}
+            >
+              {a.icon} {a.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Chat row ── */}
       <div
@@ -238,6 +254,8 @@ export default function Home() {
   const [autoScroll, setAutoScroll]     = useState(true);
   const [copiedMsgIdx, setCopiedMsgIdx] = useState<number | null>(null);
   const [expandedMsgIdx, setExpandedMsgIdx] = useState<number | null>(null);
+  const [mediaHistory, setMediaHistory]     = useState<MediaItem[]>([]);
+  const [showMediaLib, setShowMediaLib]     = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef         = useRef<HTMLTextAreaElement>(null);
@@ -361,7 +379,14 @@ export default function Home() {
     let userContent = input.trim();
     let imageUrl: string | undefined;
     const imageFile = attachment?.kind === "image" ? attachment.file : null;
-    imageUrl        = attachment?.kind === "image" ? attachment.previewUrl : undefined;
+    // Convert to stable base64 data URL so it persists after the blob is revoked
+    if (attachment?.kind === "image") {
+      imageUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(attachment.file);
+      });
+    }
 
     if (attachment?.kind === "doc") {
       const excerpt = attachment.extractedText.slice(0, 12000);
@@ -379,6 +404,21 @@ export default function Home() {
       fileName: attachment?.kind === "doc" ? attachment.file.name : undefined,
     };
     const newMessages: Message[] = [...messages, newUserMsg];
+
+    // Save to media history
+    if (attachment) {
+      const currentChat = chats.find((c) => c.id === activeChatId);
+      const mediaItem: MediaItem = {
+        id: Date.now().toString(),
+        kind: attachment.kind === "image" ? "image" : "doc",
+        name: attachment.file.name,
+        dataUrl: attachment.kind === "image" ? imageUrl : undefined,
+        chatId: activeChatId,
+        chatTitle: currentChat?.title ?? "Chat",
+        sentAt: Date.now(),
+      };
+      setMediaHistory((prev) => [mediaItem, ...prev]);
+    }
 
     setChats((prev) => prev.map((c) =>
       c.id === activeChatId ? {
@@ -546,6 +586,50 @@ export default function Home() {
             <Plus size={15} /> New Chat
           </button>
         </div>
+
+        {/* Media Library toggle */}
+        <div className="px-4 pb-2 shrink-0">
+          <button
+            onClick={() => setShowMediaLib((v) => !v)}
+            className={`w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all border
+              ${showMediaLib ? "bg-violet-600/20 border-violet-500/30 text-violet-300" : "border-white/8 text-gray-500 hover:text-gray-300 hover:bg-white/5"}`}
+          >
+            <span className="flex items-center gap-2"><Images size={13} /> Media Library</span>
+            <span className="text-[10px] text-gray-600">{mediaHistory.length}</span>
+          </button>
+        </div>
+
+        {/* Media Library Panel */}
+        {showMediaLib && (
+          <div className="px-4 pb-3 shrink-0 border-b border-white/8 max-h-64 overflow-y-auto">
+            {mediaHistory.length === 0 ? (
+              <p className="text-xs text-gray-600 py-2">No media sent yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {mediaHistory.map((item) => (
+                  <div key={item.id}
+                    onClick={() => { setActiveChatId(item.chatId); setActiveTool("chat"); if (window.innerWidth < 768) setSidebarOpen(false); }}
+                    className="flex items-center gap-2.5 p-2 rounded-xl bg-white/4 hover:bg-white/8 border border-white/6 cursor-pointer transition-colors"
+                  >
+                    {item.kind === "image" && item.dataUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={item.dataUrl} alt={item.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/10" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-violet-600/20 border border-violet-500/20 flex items-center justify-center shrink-0">
+                        <FileText size={16} className="text-violet-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-gray-300 truncate">{item.name}</p>
+                      <p className="text-[10px] text-gray-600 truncate">{item.chatTitle}</p>
+                      <p className="text-[10px] text-gray-700">{new Date(item.sentAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Chat History ── */}
         <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-1">
