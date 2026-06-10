@@ -2,33 +2,104 @@
 
 :root {
   --font-inter: "Inter", system-ui, sans-serif;
+
+  /* Design tokens */
+  --bg-base:       #070711;
+  --bg-surface:    #0e0e1e;
+  --bg-elevated:   #13132a;
+  --border:        rgba(255,255,255,0.07);
+  --border-hover:  rgba(255,255,255,0.14);
+  --violet:        #7c5af0;
+  --violet-light:  #a78bfa;
+  --cyan:          #22d3ee;
+  --text-primary:  #f0f0ff;
+  --text-secondary:#9a9ab8;
+  --text-muted:    #5a5a7a;
+
+  /* Light mode */
+  --lm-bg:         #f5f5ff;
+  --lm-surface:    #ffffff;
+  --lm-border:     rgba(0,0,0,0.08);
+  --lm-text:       #1a1a3e;
+  --lm-text-muted: #666690;
 }
 
 body {
   font-family: var(--font-inter);
-  background: #0a0a0f;
-  color: white;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Hide scrollbar but keep scroll functionality */
+/* ─── Light mode ─────────────────────────────────────────── */
+.light body,
+body.light {
+  background: var(--lm-bg);
+  color: var(--lm-text);
+}
+
+/* ─── Scrollbars ──────────────────────────────────────────── */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Custom thin scrollbar for chat */
 .overflow-y-auto::-webkit-scrollbar { width: 3px; }
 .overflow-y-auto::-webkit-scrollbar-track { background: transparent; }
-.overflow-y-auto::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+.overflow-y-auto::-webkit-scrollbar-thumb { background: rgba(124,90,240,0.25); border-radius: 2px; }
+.overflow-y-auto::-webkit-scrollbar-thumb:hover { background: rgba(124,90,240,0.45); }
 
-/* Typing bounce delay utilities */
+/* ─── Animations ──────────────────────────────────────────── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-in      { animation: fadeSlideUp 0.28s ease both; }
+.animate-fade-in { animation: fadeIn 0.2s ease both; }
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+.spin-slow { animation: spin-slow 3s linear infinite; }
+
+/* Typing bounce */
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
 
-/* Animate in */
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+/* ─── Glass surfaces ──────────────────────────────────────── */
+.glass {
+  background: rgba(14,14,30,0.65);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid var(--border);
 }
-.animate-in { animation: fadeSlideUp 0.25s ease both; }
-.fade-in { animation-name: fadeSlideUp; }
-.slide-in-from-bottom-2 { --tw-translate-y: 8px; }
+.glass-hover:hover {
+  background: rgba(14,14,30,0.8);
+  border-color: var(--border-hover);
+}
+
+/* ─── Number inputs ───────────────────────────────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Focus ring ──────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid rgba(124,90,240,0.6);
+  outline-offset: 2px;
+}
+
+/* ─── Prose overrides for ChatBubble ─────────────────────── */
+.prose table { width: 100%; border-collapse: collapse; }
+.prose th, .prose td { border: 1px solid rgba(255,255,255,0.1); }
+.prose th { background: rgba(124,90,240,0.15); }

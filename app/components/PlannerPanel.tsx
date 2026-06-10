@@ -276,22 +276,22 @@ export default function PlannerPanel() {
 
   // ── AI Generator card ─────────────────────────────────────────
   const AIGenerator = () => (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5">
+    <div className="bg-white/4 border border-white/9 rounded-2xl p-4 sm:p-5">
       <div className="flex items-center gap-2 mb-1">
         <Sparkles size={13} className="text-violet-400" />
         <span className="font-semibold text-sm text-white">AI Study Plan Generator</span>
       </div>
-      <p className="text-xs text-gray-500 mb-3">Describe your goal and AI builds a complete plan with subjects and tasks.</p>
+      <p className="text-xs text-[#9a9ab8] mb-3">Describe your goal and AI builds a complete plan with subjects and tasks.</p>
       <div className="flex flex-col gap-2">
         <input
           value={goal}
           onChange={e => setGoal(e.target.value)}
           onKeyDown={e => e.key === "Enter" && generatePlan()}
           placeholder="e.g. Prepare for calculus exam in 7 days"
-          className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-600 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/50 transition-colors"
+          className="w-full bg-white/4 border border-white/9 text-white placeholder:text-[#5a5a7a] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-500/50 transition-colors"
         />
         <button onClick={generatePlan} disabled={loading || !goal.trim()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-sm font-semibold transition-all">
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-[#9a9ab8] text-white rounded-xl text-sm font-semibold transition-all">
           {loading ? <Loader2 size={14} className="animate-spin" /> : "✦"}
           {loading ? "Generating…" : "Generate Plan"}
         </button>
@@ -306,12 +306,12 @@ export default function PlannerPanel() {
       {/* Header */}
       <div className="flex items-center gap-2">
         <button onClick={() => setMobileView("list")}
-          className="sm:hidden shrink-0 p-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 active:scale-95 transition-all">
+          className="sm:hidden shrink-0 p-2 rounded-xl bg-white/4 border border-white/9 text-gray-400 active:scale-95 transition-all">
           <ChevronLeft size={16} />
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-white truncate">{activePlan?.name}</h2>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#9a9ab8]">
             {totalTasks} tasks · {doneTasks} done
             {priorityCount > 0 && <span className="ml-2 text-red-400">· {priorityCount} priority</span>}
           </p>
@@ -330,7 +330,7 @@ export default function PlannerPanel() {
             <CheckCheck size={13} />
           </button>
           <button onClick={() => deletePlan(activePlanId)}
-            className="p-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-gray-500 hover:text-red-400 rounded-xl transition-all" title="Delete">
+            className="p-2 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/30 text-[#9a9ab8] hover:text-red-400 rounded-xl transition-all" title="Delete">
             <Trash2 size={13} />
           </button>
         </div>
@@ -338,7 +338,7 @@ export default function PlannerPanel() {
 
       {/* Progress */}
       {totalTasks > 0 && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+        <div className="bg-white/4 border border-white/9 rounded-2xl p-4">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-semibold text-white">Overall Progress</span>
             <span className="text-sm font-bold text-violet-300">{overallPct}%</span>
@@ -348,14 +348,14 @@ export default function PlannerPanel() {
               style={{ width: `${overallPct}%`, background: "linear-gradient(90deg,#6c63ff,#a78bfa,#22d3ee)" }} />
           </div>
           <div className="flex justify-between mt-2">
-            <span className="text-xs text-gray-500">{doneTasks} of {totalTasks} completed</span>
+            <span className="text-xs text-[#9a9ab8]">{doneTasks} of {totalTasks} completed</span>
             {overallPct === 100 && <span className="text-xs text-emerald-400 font-semibold">🎉 All done!</span>}
           </div>
         </div>
       )}
 
       {subjects.length === 0 && (
-        <div className="text-center py-8 text-gray-600 text-sm">No subjects yet — tap "+ Subject" to add one.</div>
+        <div className="text-center py-8 text-[#5a5a7a] text-sm">No subjects yet — tap "+ Subject" to add one.</div>
       )}
 
       {/* Subjects */}
@@ -368,7 +368,7 @@ export default function PlannerPanel() {
         const priorityTasks = subj.tasks.filter(t => t.priority && !t.done && !t.dissolving);
 
         return (
-          <div key={si} className={`bg-white/5 border border-white/10 rounded-2xl overflow-hidden ${subj.dissolving ? "dissolve-out" : ""}`}>
+          <div key={si} className={`bg-white/4 border border-white/9 rounded-2xl overflow-hidden ${subj.dissolving ? "dissolve-out" : ""}`}>
             {/* Subject header */}
             <div className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-white/3 transition-colors"
               onClick={() => toggleExpanded(si)}>
@@ -376,7 +376,7 @@ export default function PlannerPanel() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-white truncate">{subj.name}</div>
                 {subj.dueDate && (
-                  <div className={`flex items-center gap-1 text-[10px] mt-0.5 ${overdue ? "text-red-400" : "text-gray-500"}`}>
+                  <div className={`flex items-center gap-1 text-[10px] mt-0.5 ${overdue ? "text-red-400" : "text-[#9a9ab8]"}`}>
                     <Calendar size={9} /> Due {fmtDate(subj.dueDate)} {overdue && "· Overdue"}
                   </div>
                 )}
@@ -386,30 +386,30 @@ export default function PlannerPanel() {
                   {priorityTasks.length} ⚑
                 </span>
               )}
-              <div className="text-xs text-gray-500 shrink-0">{done}/{total}</div>
+              <div className="text-xs text-[#9a9ab8] shrink-0">{done}/{total}</div>
               <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden shrink-0">
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: subj.color }} />
               </div>
               {/* Due date picker */}
               <div onClick={e => e.stopPropagation()} title="Set due date" className="shrink-0">
-                <label className="cursor-pointer p-1.5 rounded-lg text-gray-600 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all block">
+                <label className="cursor-pointer p-1.5 rounded-lg text-[#5a5a7a] hover:text-cyan-400 hover:bg-cyan-500/10 transition-all block">
                   <Calendar size={12} />
                   <input type="date" value={subj.dueDate || ""} onChange={e => setSubjectDueDate(si, e.target.value)}
                     className="absolute opacity-0 w-0 h-0 pointer-events-none" />
                 </label>
               </div>
               <button onClick={e => { e.stopPropagation(); deleteSubject(si); }}
-                className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
+                className="p-1.5 rounded-lg text-[#5a5a7a] hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
                 <Trash2 size={12} />
               </button>
-              <span className="text-gray-500 text-xs shrink-0">{isOpen ? "▲" : "▼"}</span>
+              <span className="text-[#9a9ab8] text-xs shrink-0">{isOpen ? "▲" : "▼"}</span>
             </div>
 
             {/* Tasks */}
             {isOpen && (
               <div className="px-4 pb-4 flex flex-col gap-1.5 border-t border-white/5 pt-3">
                 {subj.tasks.length === 0 && (
-                  <p className="text-xs text-gray-600 py-2 text-center">No tasks yet</p>
+                  <p className="text-xs text-[#5a5a7a] py-2 text-center">No tasks yet</p>
                 )}
                 {/* Priority tasks first */}
                 {[...subj.tasks]
@@ -424,20 +424,20 @@ export default function PlannerPanel() {
                         onClick={() => toggleTask(si, origIdx)}>
                         {task.done
                           ? <CheckSquare size={16} style={{ color: subj.color }} />
-                          : <Square size={16} className="text-gray-500" />}
+                          : <Square size={16} className="text-[#9a9ab8]" />}
                       </div>
                       <span
-                        className={`text-sm flex-1 cursor-pointer select-none leading-snug transition-all ${task.done ? "line-through text-gray-600" : "text-gray-300"}`}
+                        className={`text-sm flex-1 cursor-pointer select-none leading-snug transition-all ${task.done ? "line-through text-[#5a5a7a]" : "text-gray-300"}`}
                         onClick={() => toggleTask(si, origIdx)}>
                         {task.text}
                       </span>
                       {/* Priority flag */}
                       <button onClick={() => togglePriority(si, origIdx)} title="Toggle priority"
-                        className={`shrink-0 p-1.5 rounded-lg transition-all ${task.priority ? "text-red-400 bg-red-500/10" : "text-gray-600 hover:text-red-400 hover:bg-red-500/10"}`}>
+                        className={`shrink-0 p-1.5 rounded-lg transition-all ${task.priority ? "text-red-400 bg-red-500/10" : "text-[#5a5a7a] hover:text-red-400 hover:bg-red-500/10"}`}>
                         <Flag size={11} />
                       </button>
                       <button onClick={() => deleteTask(si, origIdx)}
-                        className="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all">
+                        className="shrink-0 p-1.5 rounded-lg text-[#5a5a7a] hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -456,18 +456,18 @@ export default function PlannerPanel() {
                         if (e.key === "Escape") setAddingTask(null);
                       }}
                       placeholder="Task name… (Enter to add, Esc to cancel)"
-                      className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-600 outline-none"
+                      className="flex-1 bg-transparent text-sm text-white placeholder:text-[#5a5a7a] outline-none"
                     />
                     <button onClick={() => commitAddTask(si)}
                       className="shrink-0 px-2.5 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-semibold transition-all">
                       Add
                     </button>
                     <button onClick={() => setAddingTask(null)}
-                      className="shrink-0 text-gray-500 hover:text-white text-xs px-1">✕</button>
+                      className="shrink-0 text-[#9a9ab8] hover:text-white text-xs px-1">✕</button>
                   </div>
                 ) : (
                   <button onClick={() => setAddingTask({ si, value: "" })}
-                    className="mt-1 w-full text-center text-xs text-gray-600 hover:text-violet-400 border border-dashed border-white/10 hover:border-violet-500/40 rounded-xl px-3 py-2.5 transition-all active:scale-[0.98]">
+                    className="mt-1 w-full text-center text-xs text-[#5a5a7a] hover:text-violet-400 border border-dashed border-white/10 hover:border-violet-500/40 rounded-xl px-3 py-2.5 transition-all active:scale-[0.98]">
                     + Add task
                   </button>
                 )}
@@ -520,18 +520,18 @@ export default function PlannerPanel() {
             <div key={plan.id} onClick={() => { if (!plan.dissolving) selectPlan(plan.id); }}
               className={`group rounded-2xl border px-4 py-4 cursor-pointer transition-all active:scale-[0.99]
                 ${plan.dissolving ? "dissolve-plan" : ""}
-                ${isActive ? "bg-violet-600/20 border-violet-500/40" : "bg-white/5 border-white/10 hover:border-white/20"}`}>
+                ${isActive ? "bg-violet-600/20 border-violet-500/40" : "bg-white/4 border-white/9 hover:border-white/20"}`}>
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: plan.subjects[0]?.color ?? "#6c63ff" }} />
                 <span className="font-semibold text-sm text-white flex-1 truncate">{plan.name}</span>
                 {hasOverdue && <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full shrink-0">Overdue</span>}
                 <div className="flex gap-1 shrink-0">
                   <button onClick={e => { e.stopPropagation(); renamePlan(plan.id); }}
-                    className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/10 transition-all">
+                    className="p-1.5 rounded-lg text-[#5a5a7a] hover:text-gray-300 hover:bg-white/10 transition-all">
                     <Pencil size={11} />
                   </button>
                   <button onClick={e => { e.stopPropagation(); deletePlan(plan.id); }}
-                    className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                    className="p-1.5 rounded-lg text-[#5a5a7a] hover:text-red-400 hover:bg-red-500/10 transition-all">
                     <Trash2 size={11} />
                   </button>
                 </div>
@@ -541,8 +541,8 @@ export default function PlannerPanel() {
                   style={{ width: `${planPct}%`, background: plan.subjects[0]?.color ?? "#6c63ff" }} />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">{planDone}/{planTotal} tasks · {plan.subjects.length} subjects</span>
-                <span className={`text-xs font-semibold ${isActive ? "text-violet-400" : "text-gray-600"}`}>{planPct}%</span>
+                <span className="text-xs text-[#9a9ab8]">{planDone}/{planTotal} tasks · {plan.subjects.length} subjects</span>
+                <span className={`text-xs font-semibold ${isActive ? "text-violet-400" : "text-[#5a5a7a]"}`}>{planPct}%</span>
               </div>
             </div>
           );
@@ -587,7 +587,7 @@ export default function PlannerPanel() {
 
           <div className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1">
             {plans.length === 0 && (
-              <p className="text-xs text-gray-600 text-center px-3 py-6 leading-relaxed">No plans yet. Create one or use the AI generator.</p>
+              <p className="text-xs text-[#5a5a7a] text-center px-3 py-6 leading-relaxed">No plans yet. Create one or use the AI generator.</p>
             )}
             {plans.map(plan => {
               const hasOverdue = plan.subjects.some(s => isOverdue(s.dueDate) && s.tasks.some(t => !t.done));
@@ -602,14 +602,14 @@ export default function PlannerPanel() {
                     <span className="text-sm font-medium truncate">{plan.name}</span>
                     {hasOverdue && <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" title="Has overdue subjects" />}
                   </div>
-                  <span className="text-[10px] text-gray-600 mt-0.5 block pl-4">
+                  <span className="text-[10px] text-[#5a5a7a] mt-0.5 block pl-4">
                     {plan.subjects.reduce((a, s) => a + s.tasks.length, 0)} tasks
                   </span>
                   <div className="absolute right-1.5 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-0.5">
                     <button onClick={e => { e.stopPropagation(); renamePlan(plan.id); }}
-                      className="p-1 rounded text-gray-600 hover:text-gray-300 text-[11px] leading-none">✎</button>
+                      className="p-1 rounded text-[#5a5a7a] hover:text-gray-300 text-[11px] leading-none">✎</button>
                     <button onClick={e => { e.stopPropagation(); deletePlan(plan.id); }}
-                      className="p-1 rounded text-gray-600 hover:text-red-400"><Trash2 size={11} /></button>
+                      className="p-1 rounded text-[#5a5a7a] hover:text-red-400"><Trash2 size={11} /></button>
                   </div>
                 </div>
               );
@@ -626,9 +626,9 @@ export default function PlannerPanel() {
                 <input value={goal} onChange={e => setGoal(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && generatePlan()}
                   placeholder="e.g. Calculus exam in 7 days"
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-600 rounded-xl px-3 py-2 text-xs outline-none focus:border-violet-500/50 transition-colors" />
+                  className="w-full bg-white/4 border border-white/9 text-white placeholder:text-[#5a5a7a] rounded-xl px-3 py-2 text-xs outline-none focus:border-violet-500/50 transition-colors" />
                 <button onClick={generatePlan} disabled={loading || !goal.trim()}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 text-white rounded-xl text-xs font-semibold transition-all">
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-[#9a9ab8] text-white rounded-xl text-xs font-semibold transition-all">
                   {loading ? <Loader2 size={12} className="animate-spin" /> : "✦"}
                   {loading ? "Generating…" : "Generate"}
                 </button>

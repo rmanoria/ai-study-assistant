@@ -201,7 +201,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
               <StickyNote size={14} className="text-amber-400" />
             </div>
             <span className="text-sm font-bold text-white">My Notes</span>
-            <span className="text-[11px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">{notes.length}</span>
+            <span className="text-[11px] text-[#9a9ab8] bg-white/5 px-2 py-0.5 rounded-full">{notes.length}</span>
           </div>
           <button onClick={newNote}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg text-xs font-semibold transition-all">
@@ -211,16 +211,16 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
 
         {/* Search */}
         <div className="px-3 py-2.5 border-b border-white/5">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl focus-within:border-amber-500/40 transition-colors">
-            <Search size={13} className="text-gray-500 shrink-0" />
+          <div className="flex items-center gap-2 px-3 py-2 bg-white/4 border border-white/9 rounded-xl focus-within:border-amber-500/40 transition-colors">
+            <Search size={13} className="text-[#9a9ab8] shrink-0" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search notes…"
-              className="flex-1 bg-transparent text-xs text-white placeholder:text-gray-600 outline-none"
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-[#5a5a7a] outline-none"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-gray-500 hover:text-white transition-colors">
+              <button onClick={() => setSearch("")} className="text-[#9a9ab8] hover:text-white transition-colors">
                 <X size={11} />
               </button>
             )}
@@ -233,7 +233,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
             <div className="flex flex-col items-center justify-center gap-3 text-center p-8 h-full">
               <div className="text-4xl">📝</div>
               <div className="text-sm font-semibold text-white">{search ? "No results" : "No notes yet"}</div>
-              <div className="text-xs text-gray-500">{search ? "Try a different search" : "Click New to create your first note"}</div>
+              <div className="text-xs text-[#9a9ab8]">{search ? "Try a different search" : "Click New to create your first note"}</div>
               {!search && (
                 <button onClick={newNote} className="mt-1 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-semibold transition-all">
                   + Create Note
@@ -246,7 +246,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                 className={`px-4 py-3.5 cursor-pointer border-b border-white/5 transition-all
                   ${n.id === activeId ? "bg-amber-500/10 border-l-2 border-l-amber-500" : "hover:bg-white/5 border-l-2 border-l-transparent"}`}>
                 <div className="flex items-start gap-2">
-                  <FileText size={13} className={`mt-0.5 shrink-0 ${n.id === activeId ? "text-amber-400" : "text-gray-600"}`} />
+                  <FileText size={13} className={`mt-0.5 shrink-0 ${n.id === activeId ? "text-amber-400" : "text-[#5a5a7a]"}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="text-xs font-semibold text-white truncate">{n.title || "Untitled"}</span>
@@ -256,8 +256,8 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                         {NOTE_TAGS.find((t) => t.value === n.tag)?.label ?? n.tag}
                       </span>
                     )}
-                    <div className="text-[11px] text-gray-500 truncate leading-relaxed">{n.body?.slice(0, 50) || "Empty note…"}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">{n.created}</div>
+                    <div className="text-[11px] text-[#9a9ab8] truncate leading-relaxed">{n.body?.slice(0, 50) || "Empty note…"}</div>
+                    <div className="text-[10px] text-[#5a5a7a] mt-1">{n.created}</div>
                   </div>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                 value={title}
                 onChange={(e) => { setTitle(e.target.value); saveCurrentNote(e.target.value, body, tag); }}
                 placeholder="Note title…"
-                className="flex-1 min-w-0 bg-transparent text-white text-base font-bold outline-none placeholder:text-gray-600"
+                className="flex-1 min-w-0 bg-transparent text-white text-base font-bold outline-none placeholder:text-[#5a5a7a]"
               />
 
               {/* Tag picker */}
@@ -289,7 +289,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                 <button
                   onClick={() => setShowTagPicker((v) => !v)}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all
-                    ${tag ? getTagColor(tag) : "bg-white/5 border-white/10 text-gray-400 hover:text-white"}`}
+                    ${tag ? getTagColor(tag) : "bg-white/4 border-white/9 text-gray-400 hover:text-white"}`}
                 >
                   <Tag size={11} />
                   {tag ? NOTE_TAGS.find((t) => t.value === tag)?.label ?? tag : "Tag"}
@@ -313,7 +313,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                 )}
               </div>
 
-              <span className="text-[11px] text-gray-600 shrink-0 hidden sm:block">{wordCount} words</span>
+              <span className="text-[11px] text-[#5a5a7a] shrink-0 hidden sm:block">{wordCount} words</span>
 
               {/* Preview / Edit toggle */}
               <button
@@ -321,7 +321,7 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all shrink-0
                   ${previewMode
                     ? "bg-amber-500/20 border-amber-500/30 text-amber-300"
-                    : "bg-white/5 border-white/10 text-gray-400 hover:text-white"}`}
+                    : "bg-white/4 border-white/9 text-gray-400 hover:text-white"}`}
               >
                 {previewMode ? <Edit3 size={12} /> : <Eye size={12} />}
                 <span className="hidden sm:inline">{previewMode ? "Edit" : "Preview"}</span>
@@ -340,27 +340,27 @@ export default function NotesPanel({ onSendToChat }: NotesPanelProps) {
                     dangerouslySetInnerHTML={{ __html: `<p class='mb-2.5 leading-7 text-gray-200'>${renderMarkdown(body)}</p>` }}
                   />
                 ) : (
-                  <p className="text-gray-600 italic">Nothing to preview yet. Switch to Edit to start writing.</p>
+                  <p className="text-[#5a5a7a] italic">Nothing to preview yet. Switch to Edit to start writing.</p>
                 )}
-                <p className="text-[10px] text-gray-600 mt-6">Click anywhere to edit</p>
+                <p className="text-[10px] text-[#5a5a7a] mt-6">Click anywhere to edit</p>
               </div>
             ) : (
               <textarea
                 value={body}
                 onChange={(e) => { setBody(e.target.value); saveCurrentNote(title, e.target.value, tag); }}
                 placeholder={"Start writing your notes here…\n\nMarkdown supported:\n- **bold**, *italic*, `code`\n- # Heading 1, ## Heading 2\n- - bullet points\n\nUse the AI toolbar below to enhance your notes."}
-                className="flex-1 bg-transparent text-gray-200 text-sm px-6 py-5 outline-none resize-none leading-7 placeholder:text-gray-600 font-mono"
+                className="flex-1 bg-transparent text-gray-200 text-sm px-6 py-5 outline-none resize-none leading-7 placeholder:text-[#5a5a7a] font-mono"
               />
             )}
 
             {/* AI Toolbar */}
             <div className="shrink-0 border-t border-white/8 bg-black/20 px-4 py-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mr-1 hidden sm:block">AI</span>
+                <span className="text-[10px] text-[#5a5a7a] uppercase tracking-widest font-bold mr-1 hidden sm:block">AI</span>
 
                 {AI_ACTIONS.map(({ action, icon, label, hover }) => (
                   <button key={action} onClick={() => aiAction(action)} disabled={loading || !body.trim()}
-                    className={`flex items-center gap-1.5 px-3 py-2 bg-white/5 border border-white/10 text-gray-300 rounded-xl text-xs font-medium transition-all disabled:opacity-40 ${hover}`}>
+                    className={`flex items-center gap-1.5 px-3 py-2 bg-white/4 border border-white/9 text-gray-300 rounded-xl text-xs font-medium transition-all disabled:opacity-40 ${hover}`}>
                     {loadingAction === action ? <Loader2 size={11} className="animate-spin" /> : icon}
                     {label}
                   </button>

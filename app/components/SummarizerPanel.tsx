@@ -394,7 +394,7 @@ export default function SummarizerPanel() {
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
         {/* LEFT */}
-        <div className="flex flex-col gap-4 p-4 sm:p-6 overflow-y-auto sum-scroll md:w-1/2 md:border-r md:border-white/8 shrink-0">
+        <div className="flex flex-col gap-4 p-4 sm:p-6 overflow-y-auto sum-scroll md:w-1/2 md:border-r md:border-white/7 shrink-0">
 
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-green-500/20 border border-green-500/30 shrink-0">
@@ -408,7 +408,7 @@ export default function SummarizerPanel() {
 
           {/* Styles */}
           <div>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Summary Style</p>
+            <p className="text-xs text-[#5a5a7a] font-medium mb-2">Summary Style</p>
             <div className="flex gap-2 flex-wrap">
               {STYLES.map(s => (
                 <button key={s.id} onClick={() => setStyle(s.id)}
@@ -422,7 +422,7 @@ export default function SummarizerPanel() {
 
           {/* Level */}
           <div>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Audience Level</p>
+            <p className="text-xs text-[#5a5a7a] font-medium mb-2">Audience Level</p>
             <div className="flex gap-2 flex-wrap">
               {LEVELS.map(l => (
                 <button key={l.id} onClick={() => setLevel(l.id)}
@@ -448,7 +448,7 @@ export default function SummarizerPanel() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">Drop a file or click to upload</p>
-                <p className="text-xs text-gray-500 mt-1">PDF (text or scanned), Word, TXT, or images</p>
+                <p className="text-xs text-[#5a5a7a] mt-1">PDF (text or scanned), Word, TXT, or images</p>
               </div>
               <div className="flex gap-2 flex-wrap justify-center">
                 {["PDF","DOCX","TXT","PNG","JPG"].map(t => (
@@ -504,7 +504,7 @@ export default function SummarizerPanel() {
             readOnly={!!fileState?.extracted}
             placeholder="Paste lecture notes, articles, textbook content, or any text here…"
             rows={8}
-            className={`w-full border text-sm placeholder:text-gray-600 rounded-2xl px-4 py-3.5 outline-none transition-colors resize-none leading-relaxed sum-scroll
+            className={`w-full border text-sm placeholder:text-[#5a5a7a] rounded-2xl px-4 py-3.5 outline-none transition-colors resize-none leading-relaxed sum-scroll
               ${fileState?.extracted ? "bg-white/2 border-green-500/20 text-gray-400 cursor-default" : "bg-white/5 border-white/10 focus:border-green-500/50 text-gray-200"}`}
           />
 
@@ -515,7 +515,7 @@ export default function SummarizerPanel() {
               {loading ? "Summarizing…" : fileState?.extracted ? "Summarize Document" : "Summarize Text"}
             </button>
             {inputWordCount > 0 && !fileState?.extracting && (
-              <span className="text-xs text-gray-500">{inputWordCount.toLocaleString()} words</span>
+              <span className="text-xs text-[#5a5a7a]">{inputWordCount.toLocaleString()} words</span>
             )}
           </div>
         </div>

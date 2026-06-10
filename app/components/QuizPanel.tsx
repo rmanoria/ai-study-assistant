@@ -169,11 +169,11 @@ export default function QuizPanel() {
 
       <input value={topic} onChange={e => setTopic(e.target.value)} onKeyDown={e => e.key === "Enter" && startQuiz()}
         placeholder="Quiz topic (e.g. Cell Biology, World War II, React Hooks…)"
-        className="w-full bg-white/5 border border-white/10 text-white placeholder:text-gray-500 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-500/60 transition-colors" />
+        className="w-full bg-white/5 border border-white/10 text-white placeholder:text-[#5a5a7a] rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-500/60 transition-colors" />
 
       {/* Question type */}
       <div>
-        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600 mb-2">Question Type</p>
+        <p className="text-xs text-[#5a5a7a] font-medium mb-2">Question Type</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {([
             { v: "mcq",         label: "📋 Multiple Choice" },
@@ -190,33 +190,39 @@ export default function QuizPanel() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-cyan-500/60 transition-colors flex-1">
-          <span className="text-xs text-gray-400 whitespace-nowrap">Questions:</span>
-          <input type="number" min={1} max={30} value={count}
-            onChange={e => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
-            className="flex-1 bg-transparent text-white text-sm outline-none text-center font-semibold min-w-0" />
-          <div className="flex flex-col gap-0.5 shrink-0">
-            <button onClick={() => setCount(c => Math.min(30, c + 1))} className="text-gray-500 hover:text-cyan-400 leading-none text-[10px] px-0.5">▲</button>
-            <button onClick={() => setCount(c => Math.max(1, c - 1))} className="text-gray-500 hover:text-cyan-400 leading-none text-[10px] px-0.5">▼</button>
-          </div>
-        </div>
-        <select value={difficulty} onChange={e => setDifficulty(e.target.value as Difficulty)}
-          className="flex-1 bg-[#1a1a2e] border border-white/15 text-white rounded-xl px-4 py-2.5 text-sm outline-none cursor-pointer" style={{ colorScheme: "dark" }}>
-          <option value="easy">🟢 Easy</option>
-          <option value="medium">🟡 Medium</option>
-          <option value="hard">🔴 Hard</option>
-          <option value="mixed">🎲 Mixed</option>
-        </select>
+      {/* Difficulty */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-[#5a5a7a] font-medium shrink-0">Difficulty:</span>
+        {([
+          { v: "easy",   label: "Easy",   emoji: "🟢", active: "bg-emerald-600/20 border-emerald-500/50 text-emerald-400" },
+          { v: "medium", label: "Medium", emoji: "🟡", active: "bg-amber-600/20 border-amber-500/50 text-amber-400" },
+          { v: "hard",   label: "Hard",   emoji: "🔴", active: "bg-red-600/20 border-red-500/50 text-red-400" },
+          { v: "mixed",  label: "Mixed",  emoji: "🎲", active: "bg-cyan-600/20 border-cyan-500/50 text-cyan-400" },
+        ] as { v: Difficulty; label: string; emoji: string; active: string }[]).map(({ v, label, emoji, active }) => (
+          <button key={v} onClick={() => setDifficulty(v)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
+              ${difficulty === v ? active : "bg-white/5 border-white/10 text-[#9a9ab8] hover:text-white"}`}>
+            {emoji} {label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex gap-2 flex-wrap items-center">
-        <span className="text-xs text-gray-500 shrink-0">Quick:</span>
-        {[5,10,15,20,25,30].map(n => (
-          <button key={n} onClick={() => setCount(n)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all
-              ${count === n ? "bg-cyan-600 border-cyan-500 text-white" : "bg-white/5 border-white/10 text-gray-400 hover:border-cyan-500/40 hover:text-cyan-300"}`}>{n}</button>
-        ))}
+      {/* Question count */}
+      <div>
+        <span className="text-xs text-[#5a5a7a] font-medium mb-2 block">Number of questions:</span>
+        <div className="flex gap-2 flex-wrap">
+          {[5,8,10,15,20,25,30].map(n => (
+            <button key={n} onClick={() => setCount(n)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all min-w-10
+                ${count === n ? "bg-cyan-600/20 border-cyan-500/50 text-cyan-300" : "bg-white/5 border-white/10 text-[#9a9ab8] hover:text-white"}`}>{n}</button>
+          ))}
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-cyan-500/50">
+            <input type="number" min={1} max={30} value={count}
+              onChange={e => setCount(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+              className="w-10 bg-transparent text-white text-xs outline-none text-center font-semibold" />
+            <span className="text-[10px] text-[#5a5a7a]">custom</span>
+          </div>
+        </div>
       </div>
 
       {error && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{error}</div>}
