@@ -1,305 +1,277 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Loader2, Layers, ChevronLeft, ChevronRight, Shuffle, Trophy } from "lucide-react";
+import { AppState, esc } from '../types';
 
-type Flashcard  = { q: string; a: string; tag: string; hint?: string };
-type ViewMode   = "grid" | "study" | "results";
-type Difficulty = "easy" | "medium" | "hard" | "mixed";
+interface FlashcardPanelProps {
+  S: AppState;
+  onUpdate: (patch: Partial<AppState>) => void;
+  onSave: () => void;
+  onToast: (msg: string, type?: string) => void;
+}
 
-const DIFFICULTY_CFG = {
-  easy:   { label: "Easy",   emoji: "🟢", active: "bg-emerald-600/20 border-emerald-500/50 text-emerald-400" },
-  medium: { label: "Medium", emoji: "🟡", active: "bg-amber-600/20   border-amber-500/50   text-amber-400"   },
-  hard:   { label: "Hard",   emoji: "🔴", active: "bg-red-600/20     border-red-500/50     text-red-400"     },
-  mixed:  { label: "Mixed",  emoji: "🎲", active: "bg-violet-600/20  border-violet-500/50  text-violet-400"  },
-};
-
-const COUNT_PRESETS = [5, 8, 10, 15, 20, 25, 30, 40, 50];
-
-export default function FlashcardPanel() {
-  const [topic,        setTopic]        = useState("");
-  const [count,        setCount]        = useState(10);
-  const [difficulty,   setDifficulty]   = useState<Difficulty>("medium");
-  const [cards,        setCards]        = useState<Flashcard[]>([]);
-  const [flipped,      setFlipped]      = useState<Set<number>>(new Set());
-  const [mastered,     setMastered]     = useState<Set<number>>(new Set());
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState("");
-  const [viewMode,     setViewMode]     = useState<ViewMode>("grid");
-  const [studyIdx,     setStudyIdx]     = useState(0);
-  const [studyFlipped, setStudyFlipped] = useState(false);
-  const [showHint,     setShowHint]     = useState(false);
-
-  async function generate() {
-    if (!topic.trim()) return;
-    const n = Math.max(1, Math.min(50, count));
-    setLoading(true); setError(""); setCards([]); setFlipped(new Set()); setMastered(new Set()); setStudyIdx(0); setStudyFlipped(false); setShowHint(false);
+export default function FlashcardPanel({ S, onUpdate, onSave, onToast }: FlashcardPanelProps) {
+  async function genFC() {
+    const topicEl = document.getElementById('fcTopic') as HTMLInputElement;
+    const insEl = document.getElementById('fcInstruction') as HTMLInputElement;
+    const t = (topicEl?.value || S.fcTopic || '').trim();
+    const ins = (insEl?.value || '').trim();
+    if (!t) return onToast('Please enter a topic', 'error');
+    onUpdate({
+      fcTopic: t, fcInstruction: ins, loadingTool: true, fcError: '',
+      flashcards: [], fcFlipped: new Set(), fcMastered: new Set(), fcView: 'grid',
+    });
     try {
-      const res  = await fetch("/api/tools", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: "flashcards", payload: {
-          topic, count: String(n), difficulty,
-          instruction: `Generate EXACTLY ${n} flashcards about "${topic}" at ${difficulty} difficulty. Each must have a short one-sentence hint. Return JSON array: [{"q":"...","a":"...","tag":"...","hint":"..."}]`,
-        }}),
+      const r = await fetch('/api/tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool: 'flashcards', payload: { topic: t, count: String(S.fcCount), difficulty: S.fcDiff, instruction: ins } }),
       });
-      const data = await res.json();
-      if (data.data && Array.isArray(data.data)) {
-        setCards(data.data.slice(0, n));
-        setViewMode("grid");
-      } else { setError("Failed to generate. Please try again."); }
-    } catch { setError("Connection error. Please check your API configuration."); }
-    finally  { setLoading(false); }
+      const d = await r.json();
+      if (d.data && Array.isArray(d.data)) {
+        const cards = d.data.slice(0, S.fcCount);
+        onUpdate({
+          flashcards: cards,
+          stats: { ...S.stats, totalCards: (S.stats.totalCards || 0) + cards.length },
+          loadingTool: false,
+        });
+        onSave();
+        onToast(`✓ ${cards.length} cards generated!`, 'success');
+      } else {
+        onUpdate({ fcError: d.error || 'Failed to generate. Please try again.', loadingTool: false });
+      }
+    } catch {
+      onUpdate({ fcError: 'Connection error — check your API key.', loadingTool: false });
+    }
   }
 
-  function toggleFlip(i: number) { setFlipped(p => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; }); }
-  function toggleMastered(i: number, e?: React.MouseEvent) { e?.stopPropagation(); setMastered(p => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; }); }
-  function shuffleCards() { setCards(p => [...p].sort(() => Math.random() - 0.5)); setFlipped(new Set()); setMastered(new Set()); setStudyIdx(0); setStudyFlipped(false); setShowHint(false); }
-  function studyNext() { setStudyFlipped(false); setShowHint(false); setTimeout(() => { if (studyIdx + 1 >= cards.length) setViewMode("results"); else setStudyIdx(i => i + 1); }, 150); }
-  function studyPrev() { setStudyFlipped(false); setShowHint(false); setTimeout(() => setStudyIdx(i => Math.max(0, i - 1)), 150); }
+  function flipFC(i: number) {
+    const n = new Set(S.fcFlipped);
+    n.has(i) ? n.delete(i) : n.add(i);
+    onUpdate({ fcFlipped: n });
+  }
 
-  const masteredPct = cards.length ? Math.round((mastered.size / cards.length) * 100) : 0;
-  const remaining   = cards.length - mastered.size;
+  function masterFC(i: number) {
+    const n = new Set(S.fcMastered);
+    n.has(i) ? n.delete(i) : n.add(i);
+    const bump = n.has(i) ? 1 : 0;
+    onUpdate({
+      fcMastered: n,
+      stats: { ...S.stats, cardsStudied: (S.stats.cardsStudied || 0) + bump },
+    });
+    onSave();
+  }
 
-  const baseInput = "w-full bg-white/5 border border-white/10 text-white placeholder:text-[#5a5a7a] rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500/60 transition-colors";
-  const btnInactive = "bg-white/5 border border-white/10 text-[#9a9ab8] hover:text-white hover:border-white/20";
+  function shuffleFC() {
+    onUpdate({
+      flashcards: [...S.flashcards].sort(() => Math.random() - .5),
+      fcFlipped: new Set(), fcStudyIdx: 0, fcStudyFlipped: false,
+    });
+    onToast('Cards shuffled!');
+  }
 
-  if (viewMode === "results") {
+  const fcView = S.fcView;
+
+  if (fcView === 'results') {
+    const m = S.fcMastered.size, t = S.flashcards.length;
     return (
-      <div className="flex flex-col items-center justify-center gap-6 flex-1 p-8 text-center">
-        <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl shadow-lg"
-          style={{ background: "linear-gradient(135deg,#7c5af0,#22d3ee)" }}>
-          <Trophy size={34} className="text-white" />
-        </div>
+      <div className="panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ width: 62, height: 62, borderRadius: 14, background: 'var(--grad-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, boxShadow: 'var(--glow-v)' }}>🏆</div>
         <div>
-          <h2 className="text-2xl font-bold text-white">Session Complete!</h2>
-          <p className="text-[#9a9ab8] text-sm mt-1">{cards.length} cards reviewed</p>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>Session Complete!</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>{t} cards reviewed</div>
         </div>
-        <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center">
-            <div className="text-3xl font-bold text-emerald-400">{mastered.size}</div>
-            <div className="text-xs text-[#9a9ab8] mt-1">Mastered</div>
-          </div>
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-center">
-            <div className="text-3xl font-bold text-amber-400">{remaining}</div>
-            <div className="text-xs text-[#9a9ab8] mt-1">To Review</div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', maxWidth: 220 }}>
+          <div className="stat-box"><div className="stat-v" style={{ color: 'var(--green)' }}>{m}</div><div className="stat-l">Mastered</div></div>
+          <div className="stat-box"><div className="stat-v" style={{ color: 'var(--amber)' }}>{t - m}</div><div className="stat-l">To Review</div></div>
         </div>
-        <div className="flex gap-3 w-full max-w-xs">
-          <button onClick={() => { setStudyIdx(0); setStudyFlipped(false); setShowHint(false); setViewMode("study"); }}
-            className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all"
-            style={{ background: "linear-gradient(135deg,#7c5af0,#22d3ee)" }}>
-            Study Again
-          </button>
-          <button onClick={() => setViewMode("grid")}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-all ${btnInactive}`}>
-            Grid View
-          </button>
+        <div style={{ display: 'flex', gap: 9, width: '100%', maxWidth: 280 }}>
+          <button className="pbtn" onClick={() => onUpdate({ fcView: 'study', fcStudyIdx: 0, fcStudyFlipped: false })}>Study Again</button>
+          <button className="pbtn sec" style={{ flex: 1 }} onClick={() => onUpdate({ fcView: 'grid' })}>Grid</button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-4 p-4 sm:p-6 overflow-y-auto flex-1 w-full">
+  const m = S.fcMastered.size, t = S.flashcards.length, pct = t ? Math.round(m / t * 100) : 0;
 
-      {/* Header */}
-      <div className="flex items-center gap-3 shrink-0">
-        <div className="p-2 rounded-xl shrink-0" style={{ background: "linear-gradient(135deg,rgba(124,90,240,0.2),rgba(34,211,238,0.1))", border: "1px solid rgba(124,90,240,0.3)" }}>
-          <Layers size={18} className="text-violet-400" />
+  return (
+    <div className="panel fade-up">
+      <div className="ph">
+        <div className="pi" style={{ background: 'rgba(124,90,240,.13)' }}>🃏</div>
+        <div>
+          <div className="ptitle">Flashcard Generator</div>
+          <div className="psub">AI-powered decks with mastery tracking</div>
+        </div>
+      </div>
+
+      <div className="sg">
+        <div className="flbl">Topic or subject</div>
+        <input className="fi" id="fcTopic" placeholder="e.g. Photosynthesis, French Revolution…" defaultValue={S.fcTopic} />
+      </div>
+      <div className="sg">
+        <div className="flbl">Custom instruction (optional)</div>
+        <input className="fi" id="fcInstruction" placeholder="e.g. Focus on dates, Include formulas…" defaultValue={S.fcInstruction || ''} />
+      </div>
+
+      <div className="row2 sg">
+        <div>
+          <div className="flbl">Difficulty</div>
+          <div className="bgrp">
+            {['easy','medium','hard','mixed'].map(d => (
+              <button key={d} className={`bp${S.fcDiff === d ? ' sel' : ''}`} onClick={() => onUpdate({ fcDiff: d })}>
+                {d === 'easy' ? '🟢 Easy' : d === 'medium' ? '🟡 Medium' : d === 'hard' ? '🔴 Hard' : '🎲 Mixed'}
+              </button>
+            ))}
+          </div>
         </div>
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-white">Flashcard Generator</h2>
-          <p className="text-xs text-[#9a9ab8]">AI-powered study cards with mastery tracking</p>
-        </div>
-      </div>
-
-      {/* Topic */}
-      <input value={topic} onChange={e => setTopic(e.target.value)} onKeyDown={e => e.key === "Enter" && generate()}
-        placeholder="Topic — e.g. Photosynthesis, French Revolution, Calculus…"
-        className={baseInput} />
-
-      {/* Difficulty */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-[#5a5a7a] shrink-0 font-medium">Difficulty:</span>
-        {(Object.keys(DIFFICULTY_CFG) as Difficulty[]).map(d => {
-          const c = DIFFICULTY_CFG[d];
-          return (
-            <button key={d} onClick={() => setDifficulty(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
-                ${difficulty === d ? c.active : btnInactive}`}>
-              {c.emoji} {c.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Card count */}
-      <div>
-        <span className="text-xs text-[#5a5a7a] font-medium mb-2 block">Number of cards:</span>
-        <div className="flex gap-2 flex-wrap">
-          {COUNT_PRESETS.map(n => (
-            <button key={n} onClick={() => setCount(n)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all min-w-10
-                ${count === n ? "bg-violet-600/20 border-violet-500/50 text-violet-300" : btnInactive}`}>
-              {n}
-            </button>
-          ))}
-          {/* Custom input */}
-          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-violet-500/50">
-            <input type="number" min={1} max={50} value={count}
-              onChange={e => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-              className="w-10 bg-transparent text-white text-xs outline-none text-center font-semibold" />
-            <span className="text-[10px] text-[#5a5a7a]">custom</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Generate */}
-      <button onClick={generate} disabled={loading || !topic.trim()}
-        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-        style={{ background: "linear-gradient(135deg,#7c5af0,#5b8def)" }}>
-        {loading ? <Loader2 size={15} className="animate-spin" /> : "✦"}
-        {loading ? `Generating ${count} cards…` : `Generate ${count} Cards`}
-      </button>
-
-      {error && <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{error}</div>}
-
-      {/* Stats */}
-      {cards.length > 0 && (
-        <div className="bg-white/4 border border-white/8 rounded-2xl p-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-semibold text-[#9a9ab8]">Mastery Progress</span>
-            <span className="text-xs font-bold text-white">{masteredPct}%</span>
-          </div>
-          <div className="h-2 bg-white/8 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${masteredPct}%`, background: "linear-gradient(90deg,#7c5af0,#10b981)" }} />
-          </div>
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            {[
-              { label: "Total",    value: cards.length,  color: "text-white" },
-              { label: "Mastered", value: mastered.size, color: "text-emerald-400" },
-              { label: "Left",     value: remaining,     color: "text-amber-400" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="text-center">
-                <div className={`text-xl font-bold ${color}`}>{value}</div>
-                <div className="text-[10px] text-[#5a5a7a]">{label}</div>
-              </div>
+          <div className="flbl">Count</div>
+          <div className="bgrp">
+            {[5,8,10,15,20,30].map(n => (
+              <button key={n} className={`bp${S.fcCount === n ? ' sel' : ''}`} onClick={() => onUpdate({ fcCount: n })}>{n}</button>
             ))}
           </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => { setViewMode(viewMode === "grid" ? "study" : "grid"); setStudyIdx(0); setStudyFlipped(false); setShowHint(false); }}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${btnInactive}`}>
-              {viewMode === "grid" ? "📖 Study Mode" : "⊞ Grid View"}
-            </button>
-            <button onClick={shuffleCards}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${btnInactive}`}>
-              <Shuffle size={11} /> Shuffle
-            </button>
-          </div>
         </div>
-      )}
+      </div>
 
-      {/* STUDY MODE */}
-      {cards.length > 0 && viewMode === "study" && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-1.5 flex-wrap justify-center">
-            {cards.map((_, i) => (
-              <div key={i} className={`rounded-full transition-all duration-300
-                ${i === studyIdx ? "w-5 h-2 bg-violet-400" : mastered.has(i) ? "w-2 h-2 bg-emerald-500" : "w-2 h-2 bg-white/15"}`} />
-            ))}
-          </div>
-          <div className="text-xs text-[#9a9ab8] font-semibold">{studyIdx + 1} / {cards.length}</div>
+      <div className="sg">
+        <button className="pbtn" onClick={genFC} disabled={S.loadingTool}>
+          {S.loadingTool ? <><span className="spinning">⟳</span> Generating flashcards…</> : '✦ Generate Flashcards'}
+        </button>
+      </div>
 
-          <div className="w-full cursor-pointer" style={{ perspective: "1200px" }}
-            onClick={() => { setStudyFlipped(f => !f); setShowHint(false); }}>
-            <div className="relative w-full transition-transform duration-500"
-              style={{ transformStyle: "preserve-3d", transform: studyFlipped ? "rotateY(180deg)" : "rotateY(0deg)", minHeight: "240px" }}>
-              <div className="absolute inset-0 bg-white/4 border border-white/10 rounded-2xl p-6 flex flex-col justify-between hover:border-violet-500/35 transition-colors"
-                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">{cards[studyIdx].tag || "Study"}</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${DIFFICULTY_CFG[difficulty].active}`}>{difficulty}</span>
-                </div>
-                <div className="text-base text-white leading-relaxed flex-1 flex items-center mt-4">{cards[studyIdx].q}</div>
-                {cards[studyIdx].hint && !showHint && (
-                  <button onClick={e => { e.stopPropagation(); setShowHint(true); }}
-                    className="mt-3 text-[11px] text-[#5a5a7a] hover:text-violet-400 transition-colors self-start">💡 Show hint</button>
-                )}
-                {showHint && cards[studyIdx].hint && (
-                  <div className="mt-3 px-3 py-2 bg-violet-500/10 border border-violet-500/20 rounded-xl text-xs text-violet-300 italic">
-                    💡 {cards[studyIdx].hint}
-                  </div>
-                )}
-                <div className="text-[11px] text-[#5a5a7a] mt-3">Tap card to reveal answer</div>
-              </div>
-              <div className="absolute inset-0 bg-violet-600/10 border border-violet-500/30 rounded-2xl p-6 flex flex-col justify-between"
-                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
-                <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Answer</div>
-                <div className="text-base text-cyan-100 leading-relaxed flex-1 flex items-center mt-4">{cards[studyIdx].a}</div>
-                <button onClick={e => toggleMastered(studyIdx, e)}
-                  className={`mt-3 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all
-                    ${mastered.has(studyIdx) ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-white/5 border-white/10 text-[#9a9ab8] hover:border-emerald-500/40 hover:text-emerald-400"}`}>
-                  {mastered.has(studyIdx) ? "✓ Mastered" : "Mark as Mastered"}
-                </button>
-              </div>
+      {S.fcError && <div className="ebox sg">{S.fcError}</div>}
+
+      {S.flashcards.length > 0 && (
+        <>
+          <div className="card sg">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>Mastery</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--violet2)' }}>{pct}%</span>
+            </div>
+            <div className="pbar" style={{ height: 7 }}><div className="pfill" style={{ width: `${pct}%` }} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 7, marginTop: 10 }}>
+              <div className="stat-box"><div className="stat-v">{t}</div><div className="stat-l">Total</div></div>
+              <div className="stat-box"><div className="stat-v" style={{ color: 'var(--green)' }}>{m}</div><div className="stat-l">Mastered</div></div>
+              <div className="stat-box"><div className="stat-v" style={{ color: 'var(--amber)' }}>{t - m}</div><div className="stat-l">Left</div></div>
+            </div>
+            <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+              <button className="aib violet" style={{ flex: 1 }}
+                onClick={() => onUpdate({ fcView: fcView === 'grid' ? 'study' : 'grid', fcStudyIdx: 0, fcStudyFlipped: false })}>
+                {fcView === 'grid' ? '📖 Study Mode' : '⊞ Grid View'}
+              </button>
+              <button className="aib" onClick={shuffleFC}>🔀 Shuffle</button>
+              <button className="aib red" onClick={() => {
+                if (confirm('Clear flashcards?')) onUpdate({ flashcards: [], fcFlipped: new Set(), fcMastered: new Set(), fcView: 'setup' }); onSave();
+              }}>Clear</button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full">
-            <button onClick={studyPrev} disabled={studyIdx === 0}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-medium flex-1 justify-center transition-all disabled:opacity-30 ${btnInactive}`}>
-              <ChevronLeft size={16} /> Prev
-            </button>
-            <button onClick={studyNext}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-medium flex-1 justify-center transition-all hover:opacity-90"
-              style={{ background: "linear-gradient(135deg,#7c5af0,#22d3ee)" }}>
-              {studyIdx === cards.length - 1 ? "Finish 🏆" : <>Next <ChevronRight size={16} /></>}
+          {fcView === 'study' ? (
+            <FCStudy S={S} onUpdate={onUpdate} onMaster={masterFC} />
+          ) : (
+            <div className="fc-grid">
+              {S.flashcards.map((c, i) => {
+                const fl = S.fcFlipped.has(i), ms = S.fcMastered.has(i);
+                return (
+                  <div key={i} className="fc-wrap" onClick={() => flipFC(i)}>
+                    <div className={`fci${fl ? ' fl' : ''}`} style={{ minHeight: 155 }}>
+                      <div className="fc-face fc-front" style={ms ? { borderColor: 'rgba(16,185,129,.3)', background: 'rgba(16,185,129,.04)' } : {}}>
+                        {ms && <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--green)', marginBottom: 5 }}>✓ MASTERED</div>}
+                        <div className="fc-tag">{c.tag || 'Study'}</div>
+                        <div className="fc-q">{c.q}</div>
+                        <div className="fc-tip">Tap to reveal</div>
+                      </div>
+                      <div className="fc-face fc-back">
+                        <div className="fc-ans-label">Answer</div>
+                        <div className="fc-ans">{c.a}</div>
+                        <button
+                          className="fc-master-btn"
+                          onClick={e => { e.stopPropagation(); masterFC(i); }}
+                          style={{
+                            border: `1px solid ${ms ? 'rgba(16,185,129,.4)' : 'var(--cardb)'}`,
+                            background: ms ? 'rgba(16,185,129,.12)' : 'var(--card)',
+                            color: ms ? 'var(--green)' : 'var(--text2)',
+                          }}
+                        >
+                          {ms ? '✓ Mastered' : 'Mark Mastered'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {!S.loadingTool && !S.flashcards.length && !S.fcError && (
+        <div className="empty">
+          <div className="empty-ico">🃏</div>
+          <div className="empty-t">No flashcards yet</div>
+          <div className="empty-s">Enter a topic and generate a deck instantly.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FCStudy({ S, onUpdate, onMaster }: { S: AppState; onUpdate: (p: Partial<AppState>) => void; onMaster: (i: number) => void }) {
+  const { fcStudyIdx: i, flashcards: cards } = S;
+  const c = cards[i];
+  if (!c) return null;
+  const m = S.fcMastered.size, t = cards.length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingBottom: 20 }}>
+      <div className="dot-row">
+        {cards.map((_, j) => (
+          <div key={j} className="dp"
+            onClick={() => onUpdate({ fcStudyIdx: j, fcStudyFlipped: false })}
+            style={{ width: j === i ? 18 : 7, height: 7, background: j === i ? 'var(--violet)' : S.fcMastered.has(j) ? 'var(--green)' : 'var(--cardb)' }}
+          />
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{i + 1} / {t} — {m} mastered</div>
+
+      <div className="fc-wrap" style={{ width: '100%', maxWidth: 460 }}
+        onClick={() => onUpdate({ fcStudyFlipped: !S.fcStudyFlipped })}>
+        <div className={`fci${S.fcStudyFlipped ? ' fl' : ''}`} style={{ minHeight: 200 }}>
+          <div className="fc-face fc-front">
+            <div className="fc-tag">{c.tag || 'Study'}</div>
+            <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.5, flex: 1 }}>{c.q}</div>
+            {c.hint && <div className="fc-hint">💡 {c.hint}</div>}
+            <div className="fc-tip">Tap to reveal</div>
+          </div>
+          <div className="fc-face fc-back">
+            <div className="fc-ans-label">Answer</div>
+            <div style={{ fontSize: 15, color: 'var(--text2)', lineHeight: 1.5, flex: 1 }}>{c.a}</div>
+            <button className="fc-master-btn"
+              onClick={e => { e.stopPropagation(); onMaster(i); }}
+              style={{
+                border: `1px solid ${S.fcMastered.has(i) ? 'rgba(16,185,129,.4)' : 'var(--cardb)'}`,
+                background: S.fcMastered.has(i) ? 'rgba(16,185,129,.12)' : 'var(--card)',
+                color: S.fcMastered.has(i) ? 'var(--green)' : 'var(--text2)',
+              }}
+            >
+              {S.fcMastered.has(i) ? '✓ Mastered' : 'Mark as Mastered'}
             </button>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* GRID MODE */}
-      {cards.length > 0 && viewMode === "grid" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {cards.map((card, i) => (
-            <div key={i} onClick={() => toggleFlip(i)} className="cursor-pointer" style={{ perspective: "1000px" }}>
-              <div className="relative transition-transform duration-500"
-                style={{ transformStyle: "preserve-3d", transform: flipped.has(i) ? "rotateY(180deg)" : "rotateY(0deg)", minHeight: "164px" }}>
-                <div className={`absolute inset-0 rounded-2xl p-4 flex flex-col justify-between border transition-colors
-                  ${mastered.has(i) ? "bg-emerald-500/8 border-emerald-500/25" : "bg-white/4 border-white/10 hover:border-violet-500/35"}`}
-                  style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">{card.tag || "Study"}</span>
-                    {mastered.has(i) && <span className="text-[10px] text-emerald-400 font-bold">✓</span>}
-                  </div>
-                  <div className="text-sm text-white leading-relaxed mt-2 flex-1 flex items-center">{card.q}</div>
-                  <div className="text-[10px] text-[#5a5a7a] mt-2">Tap to reveal</div>
-                </div>
-                <div className="absolute inset-0 bg-violet-600/10 border border-violet-500/30 rounded-2xl p-4 flex flex-col justify-between"
-                  style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
-                  <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Answer</div>
-                  <div className="text-sm text-cyan-100 leading-relaxed mt-2 flex-1 flex items-center">{card.a}</div>
-                  <button onClick={e => toggleMastered(i, e)}
-                    className={`mt-2 self-start px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all
-                      ${mastered.has(i) ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400" : "bg-white/5 border-white/10 text-[#9a9ab8] hover:border-emerald-500/40 hover:text-emerald-400"}`}>
-                    {mastered.has(i) ? "✓ Mastered" : "Mark Mastered"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!loading && cards.length === 0 && !error && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-12">
-          <div className="text-5xl mb-2">🃏</div>
-          <div className="text-white font-semibold text-lg">Create your first deck</div>
-          <div className="text-[#9a9ab8] text-sm max-w-xs">Enter any topic, choose difficulty, pick a card count, and StudyAI generates your deck instantly.</div>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 9, width: '100%', maxWidth: 460 }}>
+        <button className="pbtn sec" style={{ flex: 1 }} disabled={i === 0}
+          onClick={() => onUpdate({ fcStudyIdx: Math.max(0, i - 1), fcStudyFlipped: false })}>← Prev</button>
+        <button className="pbtn" style={{ flex: 2 }}
+          onClick={() => {
+            if (i >= cards.length - 1) onUpdate({ fcView: 'results' });
+            else onUpdate({ fcStudyIdx: i + 1, fcStudyFlipped: false });
+          }}>
+          {i === cards.length - 1 ? '🏆 Finish' : 'Next →'}
+        </button>
+      </div>
     </div>
   );
 }

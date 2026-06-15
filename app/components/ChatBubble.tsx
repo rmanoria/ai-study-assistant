@@ -1,163 +1,96 @@
-"use client";
+'use client';
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useState } from 'react';
+import { Message, md2html, esc } from '../types';
 
-type Props = {
-  role: "user" | "assistant";
-  content: string;
-  darkMode?: boolean;
-};
+interface ChatBubbleProps {
+  message: Message;
+  index: number;
+  searchQuery?: string;
+  onCopy: (i: number) => void;
+  onToFlashcards: (i: number) => void;
+  onToNote: (i: number) => void;
+  onToSummarizer: (i: number) => void;
+}
 
-export default function ChatBubble({ content, darkMode = true }: Props) {
+function highlightSearch(text: string, q: string): string {
+  if (!q || !text) return esc(text || '');
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return esc(text).replace(new RegExp(escaped, 'gi'), m => `<mark class="search-highlight">${m}</mark>`);
+}
+
+export default function ChatBubble({
+  message, index, searchQuery, onCopy, onToFlashcards, onToNote, onToSummarizer
+}: ChatBubbleProps) {
+  const [copied, setCopied] = useState(false);
+  const isUser = message.role === 'user';
+  const timeStr = message.ts
+    ? new Date(message.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  const displayContent = searchQuery
+    ? highlightSearch(message.content, searchQuery)
+    : null;
+
+  const handleCopy = () => {
+    onCopy(index);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  if (isUser) {
+    return (
+      <div className="mrow u fade-in">
+        <div className="av u">👤</div>
+        <div className="bub u">
+          {message.imgData && (
+            <div className="img-attach">
+              <img src={message.imgData} alt="attachment" />
+            </div>
+          )}
+          <div
+            className="bt u"
+            dangerouslySetInnerHTML={{ __html: displayContent || esc(message.content) }}
+          />
+          {timeStr && (
+            <div style={{ fontSize: 9, color: 'var(--text3)', padding: '0 2px' }}>{timeStr}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const aiBody = searchQuery
+    ? (
+      <div
+        style={{ padding: '9px 13px', borderRadius: 13, fontSize: 13, lineHeight: 1.62, background: 'var(--card)', border: '1px solid var(--cardb)', color: 'var(--text2)' }}
+        dangerouslySetInnerHTML={{ __html: displayContent || '' }}
+      />
+    ) : (
+      <div className="bt ai">
+        <div className="md" dangerouslySetInnerHTML={{ __html: md2html(message.content) }} />
+      </div>
+    );
+
   return (
-    <div
-      className={`
-        prose max-w-none text-sm
-        prose-headings:font-semibold prose-headings:leading-tight
-        prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
-        prose-p:leading-7 prose-p:mb-3 prose-p:mt-0
-        prose-pre:p-0 prose-pre:bg-transparent prose-pre:m-0
-        prose-img:rounded-xl
-        prose-table:w-full
-        prose-th:border prose-td:border prose-th:p-2 prose-td:p-2
-        prose-blockquote:border-l-4 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-3
-        prose-ul:my-2 prose-ul:list-disc prose-ul:pl-5
-        prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-5
-        prose-li:my-1 prose-li:pl-1
-        ${
-          darkMode
-            ? `
-              prose-headings:text-white
-              prose-p:text-gray-200
-              prose-strong:text-violet-300 prose-strong:font-semibold
-              prose-em:text-gray-300
-              prose-li:text-gray-200
-              prose-code:text-cyan-300
-              prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono
-              prose-blockquote:text-gray-300 prose-blockquote:border-violet-500
-              prose-a:text-cyan-400 prose-a:no-underline hover:prose-a:underline
-              prose-th:bg-white/8 prose-th:text-white prose-td:text-gray-200
-              prose-table:border prose-table:border-white/10
-              prose-hr:border-white/10
-            `
-            : `
-              prose-headings:text-gray-900
-              prose-p:text-gray-700
-              prose-strong:text-violet-700 prose-strong:font-semibold
-              prose-em:text-gray-500
-              prose-li:text-gray-700
-              prose-code:text-violet-700
-              prose-code:bg-violet-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono
-              prose-blockquote:text-gray-500 prose-blockquote:border-violet-300
-              prose-a:text-violet-600 prose-a:no-underline hover:prose-a:underline
-              prose-th:bg-gray-100 prose-th:text-gray-800 prose-td:text-gray-700
-              prose-table:border prose-table:border-gray-200
-              prose-hr:border-gray-200
-            `
-        }
-      `}
-    >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          ul({ children }) {
-            return (
-              <ul style={{ listStyleType: "disc", paddingLeft: "1.4rem", margin: "0.4rem 0" }}
-                className={darkMode ? "text-gray-200" : "text-gray-700"}>
-                {children}
-              </ul>
-            );
-          },
-          ol({ children }) {
-            return (
-              <ol style={{ listStyleType: "decimal", paddingLeft: "1.4rem", margin: "0.4rem 0" }}
-                className={darkMode ? "text-gray-200" : "text-gray-700"}>
-                {children}
-              </ol>
-            );
-          },
-          li({ children }) {
-            return (
-              <li style={{ marginBottom: "0.25rem", paddingLeft: "0.25rem" }}
-                className={darkMode ? "text-gray-200" : "text-gray-700"}>
-                {children}
-              </li>
-            );
-          },
-          table({ children }) {
-            return (
-              <div className="overflow-x-auto my-3">
-                <table className={`w-full border-collapse text-sm ${darkMode ? "border-white/10" : "border-gray-200"}`}
-                  style={{ border: `1px solid ${darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}` }}>
-                  {children}
-                </table>
-              </div>
-            );
-          },
-          th({ children }) {
-            return (
-              <th className={`px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide ${darkMode ? "bg-white/8 text-gray-200 border-white/10" : "bg-gray-100 text-gray-700 border-gray-200"}`}
-                style={{ border: `1px solid ${darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}` }}>
-                {children}
-              </th>
-            );
-          },
-          td({ children }) {
-            return (
-              <td className={`px-3 py-2 ${darkMode ? "text-gray-300 border-white/8" : "text-gray-600 border-gray-100"}`}
-                style={{ border: `1px solid ${darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
-                {children}
-              </td>
-            );
-          },
-          blockquote({ children }) {
-            return (
-              <blockquote className={`my-3 pl-4 italic border-l-4 ${darkMode ? "border-violet-500 text-gray-300" : "border-violet-400 text-gray-500"}`}>
-                {children}
-              </blockquote>
-            );
-          },
-          code({ inline, className, children, ...props }: {
-            inline?: boolean; className?: string; children?: React.ReactNode;
-          }) {
-            const match = /language-(\w+)/.exec(className || "");
-            return !inline && match ? (
-              <SyntaxHighlighter
-                style={darkMode ? oneDark : oneLight}
-                language={match[1]}
-                PreTag="div"
-                customStyle={{
-                  borderRadius: "12px",
-                  padding: "16px 18px",
-                  fontSize: "12.5px",
-                  overflowX: "auto",
-                  marginTop: "0.6rem",
-                  marginBottom: "0.6rem",
-                  border: darkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
-                }}
-                {...props}
-              >
-                {String(children).replace(/\n$/, "")}
-              </SyntaxHighlighter>
-            ) : (
-              <code
-                className={`px-1.5 py-0.5 rounded text-xs font-mono ${darkMode ? "bg-white/10 text-cyan-300" : "bg-violet-50 text-violet-700"}`}
-                {...props}
-              >
-                {children}
-              </code>
-            );
-          },
-          hr() {
-            return <hr className={`my-4 ${darkMode ? "border-white/10" : "border-gray-200"}`} />;
-          },
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+    <div className="mrow fade-in">
+      <div className="av ai">✦</div>
+      <div className="bub">
+        {aiBody}
+        <div className="macts">
+          <button className={`mab${copied ? ' ok' : ''}`} onClick={handleCopy}>
+            {copied ? '✅ Copied' : '📋 Copy'}
+          </button>
+          <button className="mab" onClick={() => onToFlashcards(index)}>🃏 Cards</button>
+          <button className="mab" onClick={() => onToNote(index)}>📝 Note</button>
+          <button className="mab" onClick={() => onToSummarizer(index)}>⚡ Summarize</button>
+          {timeStr && (
+            <span style={{ fontSize: 9, color: 'var(--text4)', marginLeft: 'auto', alignSelf: 'center' }}>
+              {timeStr}
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
