@@ -1,6 +1,6 @@
 'use client';
 
-import { AppState, Note, uid, md2html, esc } from '../types';
+import { AppState, Note, uid, md2html } from '../types';
 
 interface SummarizerPanelProps {
   S: AppState;
@@ -11,26 +11,114 @@ interface SummarizerPanelProps {
 }
 
 export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetTool }: SummarizerPanelProps) {
-  function procFile(file: File) {
+
+  // ─── Read file and extract text client-side ─────────────────────────────────
+  async function procFile(file: File) {
     if (file.size > 10 * 1024 * 1024) return onToast('File exceeds 10MB limit', 'error');
+
     const n = file.name.toLowerCase();
-    const type = n.endsWith('.pdf') ? 'pdf' : n.endsWith('.docx') || n.endsWith('.doc') ? 'docx' : n.endsWith('.txt') ? 'txt' : file.type.startsWith('image/') ? 'image' : null;
-    if (!type) return onToast('Unsupported file type', 'error');
-    const r = new FileReader();
-    r.onload = e => onUpdate({ sumFileName: file.name, sumFileType: type, sumFileText: e.target?.result as string });
-    r.readAsDataURL(file);
+    const type = n.endsWith('.pdf') ? 'pdf'
+      : n.endsWith('.docx') || n.endsWith('.doc') ? 'docx'
+      : n.endsWith('.txt') || n.endsWith('.md') ? 'txt'
+      : file.type.startsWith('image/') ? 'image'
+      : null;
+
+    if (!type) return onToast('Unsupported file type (PDF, Word, TXT, image)', 'error');
+
+    onUpdate({ sumFileName: file.name, sumFileType: type, sumFileText: '', sumResult: '' });
+    onToast('Reading file…');
+
+    try {
+      let extractedText = '';
+
+      if (type === 'txt') {
+        // Plain text — read directly
+        extractedText = await file.text();
+
+      } else if (type === 'image') {
+        // Image — keep as base64 for vision model
+        const dataUrl = await readAsDataURL(file);
+        extractedText = `[IMAGE:${dataUrl}]`;
+
+      } else if (type === 'pdf') {
+        // Send raw base64 to server for proper extraction
+        const dataUrl = await readAsDataURL(file);
+        const base64  = dataUrl.split(',')[1];
+
+        const res = await fetch('/api/tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool: 'extract_pdf', payload: { base64 } }),
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        extractedText = d.text || '';
+
+      } else if (type === 'docx' || type === 'doc') {
+        // Send raw base64 to server for extraction
+        const dataUrl = await readAsDataURL(file);
+        const base64  = dataUrl.split(',')[1];
+
+        const res = await fetch('/api/tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool: 'extract_docx', payload: { base64 } }),
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        extractedText = d.text || '';
+      }
+
+      if (!extractedText.trim() && type !== 'image') {
+        onToast('Could not extract text — try pasting the content directly', 'error');
+        onUpdate({ sumFileName: '', sumFileType: '', sumFileText: '' });
+        return;
+      }
+
+      onUpdate({ sumFileText: extractedText });
+      onToast(`✓ ${file.name} ready`, 'success');
+
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to read file';
+      onToast(msg, 'error');
+      onUpdate({ sumFileName: '', sumFileType: '', sumFileText: '' });
+    }
   }
 
+  function readAsDataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload  = e => resolve(e.target?.result as string);
+      r.onerror = () => reject(new Error('Could not read file'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ─── Summarize ─────────────────────────────────────────────────────────────
   async function doSum() {
-    const textEl = document.getElementById('sumTextArea') as HTMLTextAreaElement;
-    const text = S.sumFileText || textEl?.value || S.sumInputText || '';
-    if (!text.trim()) return;
+    const textEl    = document.getElementById('sumTextArea') as HTMLTextAreaElement;
+    const pastedTxt = textEl?.value?.trim() || S.sumInputText?.trim() || '';
+    const fileTxt   = S.sumFileText?.trim() || '';
+    const raw       = fileTxt || pastedTxt;
+
+    if (!raw) return onToast('Upload a file or paste some text first', 'error');
+
+    const isImage = raw.startsWith('[IMAGE:');
+
     onUpdate({ loadingTool: true, sumResult: '' });
     try {
       const r = await fetch('/api/tools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool: 'summarize', payload: { text: text.slice(0, 14000), style: S.sumStyle, level: S.sumLevel } }),
+        body: JSON.stringify({
+          tool: 'summarize',
+          payload: {
+            text: isImage ? raw : raw.slice(0, 8000),
+            style: S.sumStyle,
+            level: S.sumLevel,
+            isImage,
+          },
+        }),
       });
       const d = await r.json();
       onUpdate({ sumResult: d.text || d.error || 'Failed to summarize.', loadingTool: false });
@@ -42,7 +130,13 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
 
   function sumToNote() {
     if (!S.sumResult) return;
-    const n: Note = { id: uid(), title: 'Summary — ' + new Date().toLocaleDateString(), body: S.sumResult, created: new Date().toLocaleDateString(), tag: 'summary' };
+    const n: Note = {
+      id: uid(),
+      title: 'Summary — ' + new Date().toLocaleDateString(),
+      body: S.sumResult,
+      created: new Date().toLocaleDateString(),
+      tag: 'summary',
+    };
     const notes = [n, ...S.notes];
     onUpdate({ notes, activeNoteId: n.id, stats: { ...S.stats, totalNotes: notes.length } });
     onSetTool('notes');
@@ -51,73 +145,107 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
   }
 
   const fileTypeIcons: Record<string, string> = { pdf: '📄', docx: '📝', doc: '📝', txt: '📃', image: '🖼️' };
+  const fileText   = S.sumFileText?.trim() || '';
+  const hasContent = !!(fileText || S.sumInputText?.trim());
+  const charCount  = fileText.startsWith('[IMAGE:') ? 0 : fileText.length;
 
   return (
     <div className="sum-layout">
-      {/* Left: controls */}
+      {/* ── Left: controls ── */}
       <div className="sum-left">
         <div className="ph">
           <div className="pi" style={{ background: 'rgba(16,185,129,.12)' }}>⚡</div>
           <div><div className="ptitle">AI Summarizer</div><div className="psub">PDF, Word, TXT, images & more</div></div>
         </div>
 
+        {/* Style */}
         <div className="sg">
           <div className="flbl">Summary style</div>
           <div className="bgrp">
-            {[['concise','📌 Concise'],['bullets','• Bullets'],['academic','🎓 Academic'],['eli5','🧒 ELI5'],['mindmap','🗺 Concepts'],['outline','📋 Outline']].map(([v,l]) => (
-              <button key={v} className={`bp${S.sumStyle === v ? ' sel' : ''}`} onClick={() => onUpdate({ sumStyle: v })}>{l}</button>
+            {[['concise','📌 Concise'],['bullets','• Bullets'],['academic','🎓 Academic'],
+              ['eli5','🧒 ELI5'],['mindmap','🗺 Concepts'],['outline','📋 Outline']].map(([v,l]) => (
+              <button key={v} className={`bp${S.sumStyle === v ? ' sel' : ''}`}
+                onClick={() => onUpdate({ sumStyle: v })}>{l}</button>
             ))}
           </div>
         </div>
 
+        {/* Level */}
         <div className="sg">
           <div className="flbl">Audience level</div>
           <div className="bgrp">
-            {[['elementary','🧒 Elementary'],['highschool','🏫 High School'],['undergraduate','🎓 University'],['graduate','🔬 Graduate']].map(([v,l]) => (
-              <button key={v} className={`bp${S.sumLevel === v ? ' sel' : ''}`} onClick={() => onUpdate({ sumLevel: v })}>{l}</button>
+            {[['elementary','🧒 Elementary'],['highschool','🏫 High School'],
+              ['undergraduate','🎓 University'],['graduate','🔬 Graduate']].map(([v,l]) => (
+              <button key={v} className={`bp${S.sumLevel === v ? ' sel' : ''}`}
+                onClick={() => onUpdate({ sumLevel: v })}>{l}</button>
             ))}
           </div>
         </div>
 
+        {/* File upload */}
         {!S.sumFileName ? (
-          <div className="dropzone sg"
+          <div
+            className="dropzone sg"
             onClick={() => document.getElementById('sumf')?.click()}
             onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add('drag'); }}
             onDragLeave={e => (e.currentTarget as HTMLElement).classList.remove('drag')}
-            onDrop={e => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove('drag'); const f = e.dataTransfer.files?.[0]; if (f) procFile(f); }}
+            onDrop={e => {
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).classList.remove('drag');
+              const f = e.dataTransfer.files?.[0];
+              if (f) procFile(f);
+            }}
           >
             <div style={{ fontSize: 22, marginBottom: 7 }}>📂</div>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Drop a file or click to upload</div>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>PDF, Word, TXT, images (max 10MB)</div>
-            <input type="file" id="sumf" accept=".pdf,.doc,.docx,.txt,image/*" style={{ display: 'none' }}
+            <input type="file" id="sumf" accept=".pdf,.doc,.docx,.txt,.md,image/*"
+              style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) procFile(f); e.target.value = ''; }} />
           </div>
         ) : (
           <div className="file-pill sg">
             <span style={{ fontSize: 20 }}>{fileTypeIcons[S.sumFileType] || '📄'}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{S.sumFileName}</div>
-              <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 2 }}>✓ Ready to summarize</div>
+              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {S.sumFileName}
+              </div>
+              {fileText ? (
+                <div style={{ fontSize: 10, color: 'var(--green)', marginTop: 2 }}>
+                  {fileText.startsWith('[IMAGE:')
+                    ? '✓ Image ready for AI vision'
+                    : `✓ ${charCount.toLocaleString()} characters extracted`}
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 2 }}>⟳ Extracting text…</div>
+              )}
             </div>
             <button onClick={() => onUpdate({ sumFileName: '', sumFileText: '', sumFileType: '' })}
               style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
         )}
 
-        <div className="or-div"><div className="or-line" /><span className="or-txt">or paste text</span><div className="or-line" /></div>
+        <div className="or-div">
+          <div className="or-line" /><span className="or-txt">or paste text</span><div className="or-line" />
+        </div>
 
         <textarea className="fi sg" rows={7} id="sumTextArea"
           placeholder="Paste lecture notes, article text, or any content…"
           defaultValue={S.sumInputText}
-          onChange={e => onUpdate({ sumInputText: e.target.value })}
-        />
+          onChange={e => onUpdate({ sumInputText: e.target.value })} />
 
-        <button className="pbtn" onClick={doSum} disabled={S.loadingTool || (!S.sumFileText && !(S.sumInputText || '').trim())}>
+        <button className="pbtn" onClick={doSum} disabled={S.loadingTool || !hasContent}>
           {S.loadingTool ? <><span className="spinning">⟳</span> Summarizing…</> : '⚡ Summarize'}
         </button>
+
+        {charCount > 8000 && (
+          <div style={{ fontSize: 10, color: 'var(--amber)', textAlign: 'center', marginTop: 6 }}>
+            ⚠️ File is large — first 8,000 characters will be used. Paste a key section for better results.
+          </div>
+        )}
       </div>
 
-      {/* Right: result */}
+      {/* ── Right: result ── */}
       <div className="sum-right">
         {S.loadingTool ? (
           <div className="empty">
@@ -139,7 +267,8 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
                 <button className="aib" onClick={() => {
                   const b = new Blob([S.sumResult], { type: 'text/markdown' });
                   const u = URL.createObjectURL(b);
-                  const a = document.createElement('a'); a.href = u; a.download = `summary-${Date.now()}.md`; a.click();
+                  const a = document.createElement('a');
+                  a.href = u; a.download = `summary-${Date.now()}.md`; a.click();
                   URL.revokeObjectURL(u);
                 }}>⬇ .md</button>
                 <button className="aib" onClick={sumToNote}>📝 Save Note</button>

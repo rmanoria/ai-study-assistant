@@ -75,6 +75,16 @@ export default function Page() {
     setS(loaded);
   }, []);
 
+
+  // Sync dark/light class on <html> so :root CSS variables cascade everywhere
+  useEffect(() => {
+    if (S.darkMode) {
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+    }
+  }, [S.darkMode]);
+
   // Save whenever state changes (debounced)
   const saveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -554,94 +564,140 @@ export default function Page() {
     const rem = pomRemaining(S);
     const total = pomTotalSecs(S);
     const pct = p.elapsed / total;
-    const circ = 2 * Math.PI * 88;
+    const R = 110;
+    const circ = 2 * Math.PI * R;
     const offset = circ * (1 - Math.max(0, Math.min(1, pct)));
     const phaseColor = p.phase === 'work' ? '#7c5af0' : p.phase === 'short' ? '#10b981' : '#22d3ee';
+    const phaseBg    = p.phase === 'work' ? 'rgba(124,90,240,.08)' : p.phase === 'short' ? 'rgba(16,185,129,.08)' : 'rgba(34,211,238,.08)';
     const sessionsToLong = p.target - (p.sessions % p.target);
+    const phaseName = p.phase === 'work' ? 'Focus' : p.phase === 'short' ? 'Short Break' : 'Long Break';
 
     return (
-      <div className="panel fade-up" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ width: '100%', marginBottom: 20 }}>
-          <div className="ph" style={{ marginBottom: 0 }}>
-            <div className="pi" style={{ background: 'rgba(124,90,240,.12)' }}>⏱️</div>
-            <div><div className="ptitle">Pomodoro Timer</div><div className="psub">Focus sessions with structured breaks</div></div>
-            <button className="aib" style={{ marginLeft: 'auto' }}
-              onClick={() => { if (Notification.permission !== 'granted') Notification.requestPermission().then(() => toast('Notifications enabled!', 'success')); }}
-              title="Enable notifications">🔔</button>
-          </div>
+      <div className="panel fade-up" style={{ maxWidth: 560, margin: '0 auto', width: '100%' }}>
+
+        {/* Header */}
+        <div className="ph" style={{ marginBottom: 20 }}>
+          <div className="pi" style={{ background: 'rgba(124,90,240,.12)' }}>⏱️</div>
+          <div><div className="ptitle">Pomodoro Timer</div><div className="psub">Focus sessions with structured breaks</div></div>
+          <button className="aib" style={{ marginLeft: 'auto' }}
+            onClick={() => { if (Notification.permission !== 'granted') Notification.requestPermission().then(() => toast('Notifications enabled!', 'success')); }}
+            title="Enable notifications">🔔</button>
         </div>
 
         {/* Phase tabs */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 24, background: 'var(--bg3)', padding: 4, borderRadius: 10, border: '1px solid var(--cardb)' }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 28, background: 'var(--bg3)', padding: 5, borderRadius: 12, border: '1px solid var(--cardb)' }}>
           {([['work','Focus','#7c5af0'],['short','Short Break','#10b981'],['long','Long Break','#22d3ee']] as [string,string,string][]).map(([ph,lbl,col]) => (
             <button key={ph} onClick={() => pomSetPhase(ph as 'work'|'short'|'long')}
-              style={{ padding: '6px 14px', borderRadius: 7, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer', transition: '.15s',
-                background: p.phase === ph ? col : 'transparent', color: p.phase === ph ? '#fff' : 'var(--text3)',
-                boxShadow: p.phase === ph ? 'var(--shadow-sm)' : 'none' }}>
+              style={{ flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', transition: '.18s',
+                background: p.phase === ph ? col : 'transparent',
+                color: p.phase === ph ? '#fff' : 'var(--text3)',
+                boxShadow: p.phase === ph ? '0 2px 8px rgba(0,0,0,.18)' : 'none' }}>
               {lbl}
             </button>
           ))}
         </div>
 
-        {/* Ring */}
-        <div className="pom-ring-wrap" style={{ marginBottom: 24 }}>
-          <svg viewBox="0 0 200 200" width="200" height="200">
-            <circle className="pom-ring-bg" cx="100" cy="100" r="88" />
-            <circle id="pomRingFg" className="pom-ring-fg" cx="100" cy="100" r="88"
-              stroke={phaseColor}
-              strokeDasharray={circ}
-              strokeDashoffset={offset}
-            />
-          </svg>
-          <div className="pom-center">
-            <div id="pomTime" className="pom-time" style={{ color: phaseColor }}>{pomFmt(rem)}</div>
-            <div className="pom-phase">{p.phase === 'work' ? 'Focus' : p.phase === 'short' ? 'Short Break' : 'Long Break'}</div>
-            <input className="pom-label-inp" style={{ marginTop: 6 }}
-              value={p.label} placeholder="What are you focusing on?"
-              onChange={e => update({ pom: { ...p, label: e.target.value } })} />
+        {/* Timer card — ring + time stacked, no overlap */}
+        <div style={{
+          background: phaseBg, border: `1px solid ${phaseColor}33`,
+          borderRadius: 20, padding: '32px 24px 28px', marginBottom: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+        }}>
+          {/* SVG ring — purely decorative progress arc */}
+          <div style={{ position: 'relative', width: 260, height: 260, flexShrink: 0 }}>
+            <svg viewBox="0 0 260 260" width="260" height="260" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="130" cy="130" r={R} fill="none" stroke="var(--cardb)" strokeWidth="10" />
+              <circle id="pomRingFg" cx="130" cy="130" r={R} fill="none"
+                stroke={phaseColor} strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={circ} strokeDashoffset={offset}
+                style={{ transition: 'stroke-dashoffset .8s ease, stroke .4s' }}
+              />
+            </svg>
+            {/* Time display centered inside ring */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              <div id="pomTime" style={{
+                fontSize: 52, fontWeight: 900, letterSpacing: -2, lineHeight: 1,
+                color: phaseColor, fontVariantNumeric: 'tabular-nums',
+              }}>{pomFmt(rem)}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: phaseColor, opacity: .7 }}>
+                {phaseName}
+              </div>
+            </div>
+          </div>
+
+          {/* Label input — below ring, no overlap */}
+          <input
+            className="pom-label-inp"
+            style={{ width: '100%', maxWidth: 300, textAlign: 'center', fontSize: 13 }}
+            value={p.label}
+            placeholder="What are you focusing on?"
+            onChange={e => update({ pom: { ...p, label: e.target.value } })}
+          />
+
+          {/* Session dots */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {Array(p.target).fill(0).map((_, i) => (
+                <div key={i} style={{
+                  width: 10, height: 10, borderRadius: '50%', transition: '.3s',
+                  background: i < (p.sessions % p.target) ? phaseColor : 'var(--cardb)',
+                  boxShadow: i < (p.sessions % p.target) ? `0 0 6px ${phaseColor}88` : 'none',
+                }} />
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+              {sessionsToLong === p.target
+                ? 'Start your first session'
+                : `${sessionsToLong} session${sessionsToLong !== 1 ? 's' : ''} until long break`}
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <button onClick={pomReset} style={{
+              width: 46, height: 46, borderRadius: '50%', border: '1px solid var(--cardb)',
+              background: 'var(--bg3)', color: 'var(--text2)', fontSize: 18, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '.15s',
+            }} title="Reset">⟳</button>
+
+            <button onClick={p.running ? pomPause : pomStart} style={{
+              width: 68, height: 68, borderRadius: '50%', border: 'none',
+              background: phaseColor, color: '#fff', fontSize: 26, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: `0 4px 20px ${phaseColor}55`, transition: '.15s',
+            }} title={p.running ? 'Pause' : 'Start'}>
+              {p.running ? '⏸' : '▶'}
+            </button>
+
+            <button onClick={pomSkip} style={{
+              width: 46, height: 46, borderRadius: '50%', border: '1px solid var(--cardb)',
+              background: 'var(--bg3)', color: 'var(--text2)', fontSize: 18, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '.15s',
+            }} title="Skip">⏭</button>
           </div>
         </div>
 
-        {/* Session dots */}
-        <div style={{ display: 'flex', gap: 7, marginBottom: 20 }}>
-          {Array(p.target).fill(0).map((_, i) => (
-            <div key={i} className="pom-session-dot"
-              style={{ background: i < (p.sessions % p.target) ? phaseColor : 'var(--cardb)', width: 10, height: 10 }} />
-          ))}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 20 }}>
-          {sessionsToLong === p.target ? 'Start a session to begin' : `${sessionsToLong} session${sessionsToLong !== 1 ? 's' : ''} until long break`}
-        </div>
-
-        {/* Controls */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-          <button className="pom-btn" onClick={pomReset}
-            style={{ background: 'var(--card)', border: '1px solid var(--cardb)', color: 'var(--text2)' }}>⟳</button>
-          <button className="pom-btn" onClick={p.running ? pomPause : pomStart}
-            style={{ background: phaseColor, color: '#fff', width: 64, height: 64, fontSize: 24 }}>
-            {p.running ? '⏸' : '▶'}
-          </button>
-          <button className="pom-btn" onClick={pomSkip}
-            style={{ background: 'var(--card)', border: '1px solid var(--cardb)', color: 'var(--text2)' }}>⏭</button>
-        </div>
-
-        {/* Settings */}
-        <div className="card" style={{ width: '100%', maxWidth: 400 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 12 }}>Timer Settings</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+        {/* Timer Settings */}
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '.05em' }}>Timer Settings</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
             {(
               [
-                ['Focus',       'workMins',  [15,20,25,30,45,60]] ,
-                ['Short Break', 'shortMins', [3,5,8,10,15]      ] ,
-                ['Long Break',  'longMins',  [10,15,20,25,30]   ] ,
+                ['Focus',       'workMins',  [15,20,25,30,45,60]],
+                ['Short Break', 'shortMins', [3,5,8,10,15]      ],
+                ['Long Break',  'longMins',  [10,15,20,25,30]   ],
               ] as [string, 'workMins' | 'shortMins' | 'longMins', number[]][]
             ).map(([lbl, key, opts]) => (
               <div key={key}>
-                <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6 }}>{lbl}</div>
-                <div className="bgrp" style={{ flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>{lbl}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {opts.map(n => (
-                    <button key={n} className={`bp${p[key] === n ? ' sel' : ''}`}
-                      style={{ fontSize: 11 }}
+                    <button key={n}
+                      className={`bp${p[key] === n ? ' sel' : ''}`}
+                      style={{ fontSize: 12, padding: '6px 0', textAlign: 'center' }}
                       onClick={() => update({ pom: { ...p, [key]: n, elapsed: 0, running: false } })}>
                       {n}m
                     </button>
@@ -652,15 +708,15 @@ export default function Page() {
           </div>
         </div>
 
-        {/* History */}
+        {/* Session history */}
         {p.history?.length > 0 && (
-          <div className="card" style={{ width: '100%', maxWidth: 400, marginTop: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10 }}>Recent Sessions</div>
+          <div className="card">
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>Recent Sessions</div>
             {p.history.slice(0, 5).map((h, i) => (
               <div key={i} className="pom-hist-row">
-                <span style={{ fontSize: 14 }}>{h.phase === 'work' ? '🎯' : '☕'}</span>
-                <span style={{ fontSize: 12, color: 'var(--text2)', flex: 1 }}>{h.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text3)' }}>{h.mins}m</span>
+                <span style={{ fontSize: 16 }}>{h.phase === 'work' ? '🎯' : '☕'}</span>
+                <span style={{ fontSize: 12, color: 'var(--text2)', flex: 1 }}>{h.label || phaseName}</span>
+                <span style={{ fontSize: 11, color: 'var(--text3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 8, border: '1px solid var(--cardb)' }}>{h.mins}m</span>
               </div>
             ))}
           </div>
@@ -869,7 +925,7 @@ export default function Page() {
             <button className="aib red" onClick={() => { if (confirm('Clear ALL data? This cannot be undone.')) { localStorage.removeItem('sai3'); location.reload(); } }}>🗑 Clear</button>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text4)', textAlign: 'center', marginTop: 16 }}>StudyAI v3.0 · Built by Eman</div>
+        <div style={{ fontSize: 11, color: 'var(--text4)', textAlign: 'center', marginTop: 16 }}>StudyAI v3.0 · Built with ❤️ and Claude AI</div>
       </div>
     );
   }
@@ -879,7 +935,7 @@ export default function Page() {
   const toolObj = TOOLS.find(t => t.id === S.tool);
 
   return (
-    <div className={S.darkMode ? 'app' : 'app light'}>
+    <div className="app">
       <AnimatedBackground />
       <div className={`toast${toastVisible ? ' show' : ''}${toastType ? ` ${toastType}` : ''}`}>{toastMsg}</div>
 
