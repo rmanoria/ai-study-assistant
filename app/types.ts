@@ -183,10 +183,10 @@ export type AppState = {
 
 export const TOOLS = [
   { id: 'dashboard',  e: '🏠', n: 'Dashboard',   d: 'Overview & progress' },
-  { id: 'chat',       e: '💬', n: 'Chat',         d: 'AI academic tutor' },
-  { id: 'flashcards', e: '🃏', n: 'Flashcards',   d: 'AI study cards' },
+  { id: 'chat',       e: '💬', n: 'Chat',         d: 'Academic tutor' },
+  { id: 'flashcards', e: '🃏', n: 'Flashcards',   d: 'Study cards' },
   { id: 'quiz',       e: '🧠', n: 'Quiz',         d: 'Test your knowledge' },
-  { id: 'notes',      e: '📝', n: 'Notes',        d: 'Smart note-taking' },
+  { id: 'notes',      e: '📝', n: 'Notes',        d: 'Smart note taking' },
   { id: 'summarizer', e: '⚡', n: 'Summarizer',   d: 'Analyse documents' },
   { id: 'planner',    e: '📅', n: 'Planner',      d: 'Study schedules' },
   { id: 'pomodoro',   e: '⏱️', n: 'Pomodoro',     d: 'Focus timer & sessions' },

@@ -452,7 +452,7 @@ export default function Page() {
         <div className="dash-hero sg">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--violet2)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>✦ StudyAI</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2, marginBottom: 6 }}>Your intelligent<br />study companion</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.5 }}>Powered by AI — flashcards, quizzes, smart notes, and an expert tutor.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.5 }}>Powered by AI flashcards, quizzes, smart notes, and an expert tutor.</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             <button className="pbtn" style={{ width: 'auto', padding: '8px 16px', fontSize: 12 }} onClick={() => setTool('chat')}>💬 Start Studying</button>
             <button className="pbtn sec" style={{ width: 'auto', padding: '8px 16px', fontSize: 12 }} onClick={() => setTool('flashcards')}>🃏 Create Flashcards</button>
@@ -804,8 +804,8 @@ export default function Page() {
       const streak = st.streak || 1;
       if (streak >= 7) return `🔥 ${streak}-day streak! You're unstoppable.`;
       if (streak >= 3) return `⚡ ${streak} days in a row — great momentum!`;
-      if ((st.totalQuizzes || 0) >= 10) return `🧠 ${st.totalQuizzes} quizzes completed — knowledge is building!`;
-      if (S.notes.length >= 5) return `📝 ${S.notes.length} notes written — your knowledge base is growing!`;
+      if ((st.totalQuizzes || 0) >= 10) return `🧠 ${st.totalQuizzes} quizzes completed:knowledge is building!`;
+      if (S.notes.length >= 5) return `📝 ${S.notes.length} notes written:your knowledge base is growing!`;
       return `🚀 Every expert was once a beginner. Keep studying!`;
     }
 
@@ -911,7 +911,7 @@ export default function Page() {
         {/* Motivational footer */}
         <div style={{ textAlign: 'center', padding: '16px 0 4px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>{getMotivation()}</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Keep going — consistency beats intensity.</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Keep going fam consistency beats intensity.</div>
         </div>
       </div>
     );
@@ -985,7 +985,7 @@ export default function Page() {
             <button className="aib red" onClick={() => { if (confirm('Clear ALL data? This cannot be undone.')) { localStorage.removeItem('sai3'); location.reload(); } }}>🗑 Clear</button>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text4)', textAlign: 'center', marginTop: 16 }}>StudyAI v3.0 · Built with ❤️ and Claude AI</div>
+        <div style={{ fontSize: 11, color: 'var(--text4)', textAlign: 'center', marginTop: 16 }}>StudyAI v3.0 · Built by Eman</div>
       </div>
     );
   }

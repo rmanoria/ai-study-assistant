@@ -81,7 +81,7 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
         extractedText = await extractPdfInBrowser(file);
 
         if (!extractedText || extractedText.trim().length < 30) {
-          onToast('Could not extract text — PDF may be scanned. Try pasting the text directly.', 'error');
+          onToast('Could not extract text PDF may be scanned. Try pasting the text directly.', 'error');
           onUpdate({ sumFileName: '', sumFileType: '', sumFileText: '' });
           return;
         }
@@ -101,7 +101,7 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
       }
 
       if (!extractedText.trim() && type !== 'image') {
-        onToast('Could not extract text — try pasting the content directly', 'error');
+        onToast('Could not extract text try pasting the content directly', 'error');
         onUpdate({ sumFileName: '', sumFileType: '', sumFileText: '' });
         return;
       }
@@ -269,9 +269,9 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
           {S.loadingTool ? <><span className="spinning">⟳</span> Summarizing…</> : '⚡ Summarize'}
         </button>
 
-        {charCount > 8000 && (
+        {charCount > 18000 && (
           <div style={{ fontSize: 10, color: 'var(--amber)', textAlign: 'center', marginTop: 6 }}>
-            ⚠️ File is large — first 8,000 characters will be used. Paste a key section for better results.
+            ⚠️ File is large — first 18,000 characters will be used. Paste a key section for better results.
           </div>
         )}
       </div>

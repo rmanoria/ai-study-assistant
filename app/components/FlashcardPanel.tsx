@@ -40,7 +40,7 @@ export default function FlashcardPanel({ S, onUpdate, onSave, onToast }: Flashca
         onUpdate({ fcError: d.error || 'Failed to generate. Please try again.', loadingTool: false });
       }
     } catch {
-      onUpdate({ fcError: 'Connection error — check your API key.', loadingTool: false });
+      onUpdate({ fcError: 'Connection error: check your API key.', loadingTool: false });
     }
   }
 
