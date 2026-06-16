@@ -547,7 +547,7 @@ textarea.fi { resize: vertical; line-height: 1.6; }
   .dash-hero + div { grid-template-columns: repeat(3, 1fr) !important; }
 
   /* Pomodoro ring: smaller on mobile */
-  .panel > div[style*="maxWidth: 560"] { max-width: 100% !important; }
+  .pom-panel { max-width: 100% !important; padding: 12px 10px; }
 
   /* Message actions: scrollable row */
   .macts    { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 4px; padding-bottom: 2px; }
@@ -865,3 +865,61 @@ textarea.fi { resize: vertical; line-height: 1.6; }
 
 /* Hide history section when sidebar collapsed */
 .sidebar.collapsed .sb-history { display: none; }
+
+/* ═══════════════════════════════════════════════════
+   POMODORO — fill available space, no wasted flanks
+═══════════════════════════════════════════════════ */
+.pom-panel {
+  max-width: 620px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ═══════════════════════════════════════════════════
+   QUIZ — results & review
+═══════════════════════════════════════════════════ */
+/* Hero row */
+.qz-result-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--cardb);
+  margin-bottom: 14px;
+}
+
+/* Stat boxes row */
+.qz-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.qz-stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--cardb);
+  background: var(--card);
+}
+
+/* Review rows */
+.qz-review-row {
+  padding: 12px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--cardb);
+  background: var(--card);
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .pom-panel { padding: 12px 10px; }
+  .qz-result-hero { flex-wrap: wrap; }
+  .qz-stat-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .qz-stat-box { padding: 10px 4px; }
+}

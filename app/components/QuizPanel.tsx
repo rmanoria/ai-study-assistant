@@ -1,6 +1,6 @@
 'use client';
 
-import { AppState, MODES } from '../types';
+import { AppState } from '../types';
 
 interface QuizPanelProps {
   S: AppState;
@@ -10,6 +10,7 @@ interface QuizPanelProps {
 }
 
 export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelProps) {
+
   async function genQuiz() {
     const topicEl = document.getElementById('qzTopic') as HTMLInputElement;
     const t = (topicEl?.value || S.qzTopic || '').trim();
@@ -40,6 +41,19 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
     }
   }
 
+  function endQuizNow() {
+    if (!confirm('End quiz early? Your current progress will be recorded.')) return;
+    onUpdate({
+      quizPhase: 'result',
+      // wrongIdxs already tracked; unanswered questions counted as wrong
+      wrongIdxs: [
+        ...S.wrongIdxs,
+        ...Array.from({ length: S.questions.length - S.quizIdx - 1 }, (_, i) => S.quizIdx + 1 + i),
+      ],
+    });
+  }
+
+  // ── SETUP ──────────────────────────────────────────────────────────────────
   if (S.quizPhase === 'setup') {
     return (
       <div className="panel fade-up">
@@ -89,33 +103,144 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
     );
   }
 
+  // ── RESULT ─────────────────────────────────────────────────────────────────
   if (S.quizPhase === 'result') {
-    const pct = Math.round(S.quizScore / S.questions.length * 100);
+    const total = S.questions.length;
+    const correct = S.quizScore;
+    const wrong = S.wrongIdxs.length;
+    const skipped = total - correct - wrong;
+    const pct = Math.round(correct / total * 100);
     const passed = pct >= 70;
+
+    // Grade label
+    const grade = pct >= 90 ? { lbl: 'A+', col: '#10b981' }
+      : pct >= 80 ? { lbl: 'A', col: '#10b981' }
+      : pct >= 70 ? { lbl: 'B', col: '#22d3ee' }
+      : pct >= 60 ? { lbl: 'C', col: '#f59e0b' }
+      : pct >= 50 ? { lbl: 'D', col: '#f97316' }
+      : { lbl: 'F', col: '#f43f5e' };
+
+    const tips: string[] = [];
+    if (pct < 70) tips.push('Review the questions you got wrong and try again.');
+    if (wrong > 0) tips.push(`Focus on ${wrong} incorrect answer${wrong > 1 ? 's' : ''} — use the Retry Wrong button.`);
+    if (pct >= 90) tips.push('Excellent mastery! Try a harder difficulty next time.');
+    if (pct >= 70 && pct < 90) tips.push('Good work! A few more reviews and you\'ll ace it.');
+
     return (
-      <div className="panel fade-up" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center' }}>
-        <div style={{ fontSize: 48 }}>{passed ? '🏆' : '📚'}</div>
-        <div style={{ fontSize: 22, fontWeight: 800 }}>{passed ? 'Great job!' : 'Keep studying!'}</div>
-        <div style={{ fontSize: 36, fontWeight: 900, color: passed ? 'var(--green)' : 'var(--amber)' }}>{pct}%</div>
-        <div style={{ fontSize: 13, color: 'var(--text2)' }}>{S.quizScore} / {S.questions.length} correct</div>
-        <div style={{ display: 'flex', gap: 9, width: '100%', maxWidth: 300 }}>
-          <button className="pbtn" onClick={() => onUpdate({ quizPhase: 'setup', questions: [] })}>New Quiz</button>
+      <div className="panel fade-up">
+
+        {/* Score hero */}
+        <div className="qz-result-hero">
+          <div style={{ fontSize: 48, lineHeight: 1 }}>{passed ? '🏆' : pct >= 50 ? '📚' : '💪'}</div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>
+              {passed ? 'Great job!' : pct >= 50 ? 'Keep studying!' : 'Don\'t give up!'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{S.qzTopic}</div>
+          </div>
+          <div style={{ marginLeft: 'auto', textAlign: 'center' }}>
+            <div style={{ fontSize: 36, fontWeight: 900, color: grade.col, lineHeight: 1 }}>{grade.lbl}</div>
+            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{pct}%</div>
+          </div>
+        </div>
+
+        {/* Stat row */}
+        <div className="qz-stat-row sg">
+          <div className="qz-stat-box" style={{ borderColor: 'rgba(16,185,129,.3)', background: 'rgba(16,185,129,.07)' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--green)' }}>{correct}</div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Correct</div>
+          </div>
+          <div className="qz-stat-box" style={{ borderColor: 'rgba(244,63,94,.3)', background: 'rgba(244,63,94,.07)' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--rose)' }}>{wrong}</div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Wrong</div>
+          </div>
+          <div className="qz-stat-box" style={{ borderColor: 'rgba(124,90,240,.3)', background: 'rgba(124,90,240,.07)' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--violet2)' }}>{total}</div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Total</div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="pbar sg" style={{ height: 8, borderRadius: 4 }}>
+          <div className="pfill" style={{ width: `${pct}%`, background: grade.col }} />
+        </div>
+
+        {/* Tips */}
+        {tips.length > 0 && (
+          <div className="card sg" style={{ borderColor: 'rgba(124,90,240,.2)', background: 'rgba(124,90,240,.05)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--violet2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>💡 Study Tips</div>
+            {tips.map((tip, i) => (
+              <div key={i} style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4, paddingLeft: 12, borderLeft: '2px solid var(--violet)', lineHeight: 1.5 }}>{tip}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Question review */}
+        {S.questions.length > 0 && (
+          <div className="sg">
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.05em' }}>📋 Question Review</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {S.questions.map((q, i) => {
+                const isWrong = S.wrongIdxs.includes(i);
+                const isCorrect = !isWrong && i < S.quizIdx + (S.quizPhase === 'result' ? 1 : 0);
+                return (
+                  <div key={i} className="qz-review-row" style={{
+                    borderColor: isCorrect ? 'rgba(16,185,129,.3)' : isWrong ? 'rgba(244,63,94,.25)' : 'var(--cardb)',
+                    background: isCorrect ? 'rgba(16,185,129,.05)' : isWrong ? 'rgba(244,63,94,.05)' : 'var(--card)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{isCorrect ? '✅' : isWrong ? '❌' : '⬜'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 4, lineHeight: 1.4 }}>
+                          Q{i + 1}. {q.question}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>
+                          ✓ Answer: {q.answer}
+                        </div>
+                        {q.explanation && (
+                          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4, fontStyle: 'italic', lineHeight: 1.5 }}>
+                            {q.explanation}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+          <button className="pbtn" style={{ flex: 1, minWidth: 120 }} onClick={() => onUpdate({ quizPhase: 'setup', questions: [] })}>
+            🔄 New Quiz
+          </button>
           {S.wrongIdxs.length > 0 && (
-            <button className="pbtn sec" onClick={() => onUpdate({
+            <button className="pbtn sec" style={{ flex: 1, minWidth: 120 }} onClick={() => onUpdate({
               questions: S.wrongIdxs.map(i => S.questions[i]),
               quizPhase: 'active', quizIdx: 0, quizScore: 0, wrongIdxs: [],
               selectedMCQ: null, selectedTF: null, saInput: '', saResult: null, showExplain: false,
-            })}>Retry Wrong</button>
+            })}>
+              🔁 Retry Wrong ({S.wrongIdxs.length})
+            </button>
           )}
+          <button className="pbtn sec" style={{ flex: 1, minWidth: 120 }} onClick={() => onUpdate({
+            questions: [...S.questions].sort(() => Math.random() - 0.5),
+            quizPhase: 'active', quizIdx: 0, quizScore: 0, wrongIdxs: [],
+            selectedMCQ: null, selectedTF: null, saInput: '', saResult: null, showExplain: false,
+          })}>
+            🔀 Retake All
+          </button>
         </div>
       </div>
     );
   }
 
-  // Active quiz
+  // ── ACTIVE ─────────────────────────────────────────────────────────────────
   const q = S.questions[S.quizIdx];
   if (!q) return null;
-  const pct = S.quizIdx / S.questions.length;
+  const progressPct = S.quizIdx / S.questions.length;
 
   async function checkShort() {
     const el = document.getElementById('saInput') as HTMLTextAreaElement;
@@ -153,22 +278,53 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
 
   return (
     <div className="panel fade-up">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>{S.quizIdx + 1} / {S.questions.length}</span>
-        <div className="qz-prog">
+      {/* Header with End Quiz button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>
+            {S.quizIdx + 1} / {S.questions.length}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>
+            ✓ {S.quizScore}
+          </span>
+          {S.wrongIdxs.length > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--rose)', fontWeight: 600 }}>
+              ✗ {S.wrongIdxs.length}
+            </span>
+          )}
+        </div>
+        {/* Progress dots */}
+        <div className="qz-prog" style={{ flex: 1, justifyContent: 'center', padding: '0 12px' }}>
           {S.questions.map((_, i) => (
             <div key={i} className="qz-dot" style={{
-              background: i < S.quizIdx ? (S.wrongIdxs.includes(i) ? 'var(--rose)' : 'var(--green)') : i === S.quizIdx ? 'var(--violet)' : 'var(--cardb)'
+              background: i < S.quizIdx
+                ? (S.wrongIdxs.includes(i) ? 'var(--rose)' : 'var(--green)')
+                : i === S.quizIdx ? 'var(--violet)' : 'var(--cardb)',
             }} />
           ))}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>Score: {S.quizScore}</span>
+        {/* END QUIZ button */}
+        <button
+          className="aib red"
+          onClick={endQuizNow}
+          style={{ fontSize: 11, fontWeight: 700, flexShrink: 0 }}
+        >
+          ✕ End Quiz
+        </button>
       </div>
 
-      <div className="pbar sg"><div className="pfill" style={{ width: `${pct * 100}%` }} /></div>
+      {/* Progress bar */}
+      <div className="pbar sg"><div className="pfill" style={{ width: `${progressPct * 100}%` }} /></div>
 
-      <div className="card sg" style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>{q.question}</div>
+      {/* Question */}
+      <div className="card sg" style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--violet2)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
+          Question {S.quizIdx + 1} · {S.qzDiff} · {q.type === 'mcq' ? 'Multiple Choice' : q.type === 'tf' ? 'True / False' : 'Short Answer'}
+        </div>
+        {q.question}
+      </div>
 
+      {/* MCQ */}
       {q.type === 'mcq' && q.options && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {q.options.map((opt, i) => {
@@ -182,11 +338,7 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
               else if (isSelected && !isCorrect) cls += ' wr';
             } else if (isSelected) cls += ' sel';
             return (
-              <button key={i} className={cls}
-                onClick={() => {
-                  if (S.selectedMCQ !== null) return;
-                  onUpdate({ selectedMCQ: i });
-                }}>
+              <button key={i} className={cls} onClick={() => { if (S.selectedMCQ !== null) return; onUpdate({ selectedMCQ: i }); }}>
                 <div className="opt-key">{letters[i]}</div>
                 {opt}
               </button>
@@ -204,17 +356,16 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
               </button>
             </div>
           )}
-          {S.showExplain && q.explanation && (
-            <div className="exp-box">{q.explanation}</div>
-          )}
+          {S.showExplain && q.explanation && <div className="exp-box">{q.explanation}</div>}
         </div>
       )}
 
+      {/* True/False */}
       {q.type === 'tf' && (
         <div style={{ display: 'flex', gap: 9 }}>
           {[true, false].map(val => {
             const revealed = S.selectedTF !== null;
-            const isCorrect = String(val) === q.answer.toLowerCase() || (val && q.answer.toLowerCase() === 'true') || (!val && q.answer.toLowerCase() === 'false');
+            const isCorrect = (val && ['true','yes'].includes(q.answer.toLowerCase())) || (!val && ['false','no'].includes(q.answer.toLowerCase()));
             const isSelected = S.selectedTF === val;
             let cls = 'qz-opt';
             if (revealed) {
@@ -238,6 +389,7 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
         </div>
       )}
 
+      {/* Short Answer */}
       {q.type === 'short' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           <textarea className="fi" id="saInput" rows={3} placeholder="Type your answer…" defaultValue={S.saInput} />
@@ -247,11 +399,7 @@ export default function QuizPanel({ S, onUpdate, onSave, onToast }: QuizPanelPro
             </button>
             {S.saResult && <button className="pbtn sec" onClick={() => advance(S.saResult?.toLowerCase().includes('correct') || false)}>Next →</button>}
           </div>
-          {S.saResult && (
-            <div className={`exp-box${S.saResult.toLowerCase().includes('correct') ? '' : ''}`}>
-              {S.saResult}
-            </div>
-          )}
+          {S.saResult && <div className="exp-box">{S.saResult}</div>}
         </div>
       )}
     </div>
