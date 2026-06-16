@@ -116,7 +116,7 @@ input, textarea { font-family: var(--font); }
 /* ═══════════════════════════════════════════════════
    LAYOUT
 ═══════════════════════════════════════════════════ */
-.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; position: relative; }
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; position: relative; }
 
 .app-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
 .orb1 { position: absolute; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(124,90,240,.10), transparent 70%); top: -80px; left: -80px; animation: pulse 8s ease-in-out infinite; }
@@ -585,6 +585,13 @@ textarea.fi { resize: vertical; line-height: 1.6; }
   .iarea    { padding: 6px 10px 8px; }
   /* Pomodoro ring: shrink in landscape */
   svg[viewBox="0 0 260 260"] { width: 180px !important; height: 180px !important; }
+}
+
+/* ── Safe area insets (iOS notch / Android gesture bar) ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .iarea   { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  .panel   { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
 
 /* ── Touch-friendly min tap targets ── */
