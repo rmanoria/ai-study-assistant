@@ -633,7 +633,7 @@ export default function Page() {
     const phaseName = p.phase === 'work' ? 'Focus' : p.phase === 'short' ? 'Short Break' : 'Long Break';
 
     return (
-      <div className="panel fade-up pom-panel">
+      <div className="panel fade-up"><div className="pom-inner">
 
         {/* Header */}
         <div className="ph" style={{ marginBottom: 20 }}>
@@ -747,8 +747,8 @@ export default function Page() {
             {(
               [
                 ['Focus',       'workMins',  [15,20,25,30,45,60]],
-                ['Short Break', 'shortMins', [3,5,8,10,15,20]      ],
-                ['Long Break',  'longMins',  [10,15,20,25,30,35]   ],
+                ['Short Break', 'shortMins', [3,5,8,10,15]      ],
+                ['Long Break',  'longMins',  [10,15,20,25,30]   ],
               ] as [string, 'workMins' | 'shortMins' | 'longMins', number[]][]
             ).map(([lbl, key, opts]) => (
               <div key={key}>
@@ -781,7 +781,7 @@ export default function Page() {
             ))}
           </div>
         )}
-      </div>
+      </div></div>
     );
   }
 

@@ -126,7 +126,7 @@ input, textarea { font-family: var(--font); }
 
 .navbar { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 50px; border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; z-index: 30; box-shadow: var(--shadow-sm); }
 .main   { display: flex; flex: 1; overflow: hidden; position: relative; }
-.sidebar { width: var(--sidebar-w); flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg2); overflow: hidden; transition: transform .24s cubic-bezier(.4,0,.2,1); }
+.sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); max-width: var(--sidebar-w); flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg2); overflow: hidden; clip-path: inset(0); transition: width .24s cubic-bezier(.4,0,.2,1), min-width .24s cubic-bezier(.4,0,.2,1), max-width .24s cubic-bezier(.4,0,.2,1), transform .24s cubic-bezier(.4,0,.2,1); }
 .content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ═══════════════════════════════════════════════════
@@ -547,7 +547,7 @@ textarea.fi { resize: vertical; line-height: 1.6; }
   .dash-hero + div { grid-template-columns: repeat(3, 1fr) !important; }
 
   /* Pomodoro ring: smaller on mobile */
-  .pom-panel { max-width: 100% !important; padding: 12px 10px; }
+  .pom-inner { max-width: 100% !important; }
 
   /* Message actions: scrollable row */
   .macts    { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 4px; padding-bottom: 2px; }
@@ -665,14 +665,11 @@ textarea.fi { resize: vertical; line-height: 1.6; }
 /* ═══════════════════════════════════════════════════
    SIDEBAR COLLAPSE (desktop)
 ═══════════════════════════════════════════════════ */
-.sidebar {
-  transition: width .24s cubic-bezier(.4,0,.2,1), transform .24s cubic-bezier(.4,0,.2,1);
-}
-
 /* ── Collapsed sidebar: icon-only strip ── */
 .sidebar.collapsed {
-  width: 54px;
-  min-width: 54px;
+  width: 54px !important;
+  min-width: 54px !important;
+  max-width: 54px !important;
   overflow: hidden;
 }
 
@@ -740,7 +737,7 @@ textarea.fi { resize: vertical; line-height: 1.6; }
 .sidebar.collapsed > .sb-label { display: none; }
 
 @media (min-width: 641px) {
-  .sidebar.collapsed + .content { flex: 1; }
+  .sidebar.collapsed + .content { flex: 1; min-width: 0; }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -869,10 +866,10 @@ textarea.fi { resize: vertical; line-height: 1.6; }
 /* ═══════════════════════════════════════════════════
    POMODORO — fill available space, no wasted flanks
 ═══════════════════════════════════════════════════ */
-.pom-panel {
+.pom-inner {
   max-width: 620px;
-  margin: 0 auto;
   width: 100%;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 
@@ -918,7 +915,7 @@ textarea.fi { resize: vertical; line-height: 1.6; }
 
 /* Mobile */
 @media (max-width: 480px) {
-  .pom-panel { padding: 12px 10px; }
+  .pom-inner { padding: 0; }
   .qz-result-hero { flex-wrap: wrap; }
   .qz-stat-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .qz-stat-box { padding: 10px 4px; }
