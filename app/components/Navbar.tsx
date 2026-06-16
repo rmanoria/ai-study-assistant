@@ -1,6 +1,7 @@
 'use client';
 
 import { AppState, TOOLS, ToolId } from '../types';
+import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 
 interface NavbarProps {
   S: AppState;
@@ -19,8 +20,8 @@ export default function Navbar({
   const bcText = S.tool === 'chat'
     ? (S.chats.find(c => c.id === S.activeChatId)?.title || 'Chat')
     : (tool?.n || '');
-
   const isCollapsed = S.sidebarCollapsed;
+  const { isSignedIn } = useUser();
 
   return (
     <nav className="navbar">
@@ -31,13 +32,10 @@ export default function Navbar({
         aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {/* Animate between hamburger and arrow */}
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transition: 'transform .22s' }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           {isCollapsed ? (
-            /* Right-pointing chevron = expand */
             <polyline points="9,18 15,12 9,6" />
           ) : (
-            /* Hamburger = collapse */
             <>
               <line x1="3" y1="6" x2="21" y2="6"/>
               <line x1="3" y1="12" x2="21" y2="12"/>
@@ -52,23 +50,13 @@ export default function Navbar({
         <span className="logo-name">StudyAI</span>
       </div>
 
-      <div className="nav-bc">
-        <b>{bcText}</b>
-      </div>
+      <div className="nav-bc"><b>{bcText}</b></div>
 
       <span className="kbd-badge" onClick={() => onSetTool('settings')} style={{ cursor: 'pointer' }}>?</span>
 
       {S.pom.running && S.tool !== 'pomodoro' && (
-        <button
-          onClick={onPomBadgeClick}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-            borderRadius: 20, border: '1px solid rgba(124,90,240,.35)',
-            background: 'rgba(124,90,240,.12)', color: 'var(--violet2)',
-            fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--violet)', display: 'inline-block' }} />
+        <button onClick={onPomBadgeClick} className="pom-nav-badge">
+          <span className="pom-nav-dot" />
           {pomBadgeTime}
         </button>
       )}
@@ -103,7 +91,24 @@ export default function Navbar({
         </svg>
       </button>
 
-      <button className="sign-btn">Sign In</button>
+      {/* Auth — hook-based, no SignedIn/SignedOut components */}
+      {!isSignedIn ? (
+        <SignInButton mode="modal">
+          <button className="sign-btn">Sign In</button>
+        </SignInButton>
+      ) : (
+        <UserButton
+          appearance={{
+            elements: {
+              avatarBox: 'clerk-avatar',
+              userButtonPopoverCard: 'clerk-popover',
+              userButtonPopoverActionButton: 'clerk-popover-btn',
+              userButtonPopoverActionButtonText: 'clerk-popover-btn-text',
+              userButtonPopoverFooter: 'clerk-popover-footer',
+            },
+          }}
+        />
+      )}
     </nav>
   );
 }

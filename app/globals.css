@@ -927,3 +927,268 @@ textarea.fi { resize: vertical; line-height: 1.6; }
   .qz-stat-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .qz-stat-box { padding: 10px 4px; }
 }
+
+/* ═══════════════════════════════════════════════════
+   CLERK AUTH — custom styled components
+═══════════════════════════════════════════════════ */
+
+/* Pomodoro nav badge */
+.pom-nav-badge {
+  display: flex; align-items: center; gap: 5px; padding: 4px 10px;
+  border-radius: 20px; border: 1px solid rgba(124,90,240,.35);
+  background: rgba(124,90,240,.12); color: var(--violet2);
+  font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+}
+.pom-nav-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--violet); display: inline-block; flex-shrink: 0;
+}
+
+/* Clerk UserButton avatar sizing */
+.clerk-avatar {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  border: 2px solid rgba(124,90,240,.35) !important;
+  transition: border-color .15s !important;
+}
+.clerk-avatar:hover { border-color: rgba(124,90,240,.6) !important; }
+
+/* Clerk popover card — dark theme match */
+.clerk-popover {
+  background: var(--bg3) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-lg) !important;
+  font-family: var(--font) !important;
+}
+.clerk-popover-btn {
+  border-radius: 7px !important;
+  font-family: var(--font) !important;
+  transition: background .12s !important;
+}
+.clerk-popover-btn:hover { background: var(--cardhover) !important; }
+.clerk-popover-btn-text { color: var(--text2) !important; font-size: 13px !important; }
+.clerk-popover-footer { display: none !important; }
+
+/* ── Sidebar auth row (visible on all sizes, more prominent on mobile) ── */
+.sb-auth-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.sb-signin-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--grad-brand);
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .15s;
+  box-shadow: var(--glow-v);
+}
+.sb-signin-btn:hover { opacity: .86; }
+
+.sb-user-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 4px;
+}
+.sb-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(124,90,240,.3);
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.sb-user-info { flex: 1; min-width: 0; }
+.sb-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-signout-btn {
+  background: none;
+  border: none;
+  color: var(--rose);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font);
+  transition: opacity .12s;
+}
+.sb-signout-btn:hover { opacity: .75; }
+
+/* Desktop: hide sidebar auth row (navbar handles it) */
+@media (min-width: 641px) {
+  .sb-auth-row { display: none; }
+  /* Show sign-in button on desktop navbar */
+  .sign-btn { display: flex !important; }
+}
+
+/* Mobile: hide navbar sign-btn, show sidebar auth */
+@media (max-width: 640px) {
+  .sign-btn { display: none !important; }
+  .sb-auth-row { display: block; }
+  /* Hide collapsed sidebar auth too */
+  .sidebar.collapsed .sb-auth-row { display: none; }
+}
+
+/* Clerk modal override — ensure it sits above everything */
+.cl-modalOverlay { z-index: 9999 !important; }
+.cl-card {
+  background: var(--bg3) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 16px !important;
+  font-family: var(--font) !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   CLERK MODAL — fix dark theme text visibility
+═══════════════════════════════════════════════════ */
+
+/* Force Clerk modal to use its own light theme */
+.cl-modalOverlay,
+.cl-modalContent,
+.cl-card,
+.cl-signIn-root,
+.cl-signUp-root {
+  --clerk-bg: #ffffff;
+  color-scheme: light !important;
+}
+
+/* Modal backdrop */
+.cl-modalOverlay {
+  z-index: 9999 !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Card container */
+.cl-card {
+  background: #ffffff !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4) !important;
+  border: none !important;
+  font-family: var(--font) !important;
+  padding: 8px !important;
+}
+
+/* All text inside Clerk modal */
+.cl-card *,
+.cl-headerTitle,
+.cl-headerSubtitle,
+.cl-socialButtonsBlockButton__text,
+.cl-dividerText,
+.cl-formFieldLabel,
+.cl-footerActionText,
+.cl-identityPreviewText,
+.cl-formResendCodeLink {
+  color: #1a1a2e !important;
+}
+
+/* Header */
+.cl-headerTitle {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #1a1a2e !important;
+}
+.cl-headerSubtitle {
+  color: #6b6b8a !important;
+  font-size: 13px !important;
+}
+
+/* Social buttons (Google, Apple) */
+.cl-socialButtonsBlockButton {
+  background: #f5f5f8 !important;
+  border: 1px solid #e0e0ea !important;
+  border-radius: 10px !important;
+  color: #1a1a2e !important;
+  font-weight: 600 !important;
+  transition: background .15s !important;
+}
+.cl-socialButtonsBlockButton:hover {
+  background: #ebebf5 !important;
+}
+.cl-socialButtonsBlockButton__text {
+  color: #1a1a2e !important;
+  font-weight: 600 !important;
+}
+
+/* Divider */
+.cl-dividerLine { background: #e0e0ea !important; }
+.cl-dividerText  { color: #9898b8 !important; font-size: 11px !important; }
+
+/* Form inputs */
+.cl-formFieldInput {
+  background: #f8f8fc !important;
+  border: 1.5px solid #d0d0e8 !important;
+  border-radius: 9px !important;
+  color: #1a1a2e !important;
+  font-size: 14px !important;
+  padding: 11px 13px !important;
+  font-family: var(--font) !important;
+}
+.cl-formFieldInput:focus {
+  border-color: #7c5af0 !important;
+  box-shadow: 0 0 0 3px rgba(124,90,240,.12) !important;
+  outline: none !important;
+}
+.cl-formFieldInput::placeholder { color: #aaaacc !important; }
+.cl-formFieldLabel {
+  color: #4a4a7a !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+/* Continue / Submit button */
+.cl-formButtonPrimary {
+  background: linear-gradient(135deg, #7c5af0, #6366f1) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  padding: 12px !important;
+  transition: opacity .15s !important;
+  box-shadow: 0 4px 14px rgba(124,90,240,.35) !important;
+}
+.cl-formButtonPrimary:hover { opacity: .88 !important; }
+
+/* Footer links */
+.cl-footerActionLink {
+  color: #7c5af0 !important;
+  font-weight: 700 !important;
+}
+.cl-footerActionText { color: #6b6b8a !important; }
+.cl-footer { background: #f8f8fc !important; border-top: 1px solid #e8e8f0 !important; border-radius: 0 0 16px 16px !important; }
+
+/* Internal nav / back links */
+.cl-identityPreviewEditButton,
+.cl-formResendCodeLink,
+.cl-backLink { color: #7c5af0 !important; }
+
+/* OTP input */
+.cl-otpCodeFieldInput {
+  background: #f8f8fc !important;
+  border: 1.5px solid #d0d0e8 !important;
+  border-radius: 8px !important;
+  color: #1a1a2e !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+.cl-otpCodeFieldInput:focus { border-color: #7c5af0 !important; }

@@ -17,6 +17,7 @@ import {
   AppState, ToolId, Chat, Note, Message, TOOLS, MODES, QPS, SHORTCUTS,
   NOTE_TAG_COLS, uid, mkChat, md2html, esc, getDefaultState,
 } from './types';
+import { SignInButton, UserButton, useClerk, useUser } from '@clerk/nextjs';
 
 // ─── Persistence ─────────────────────────────────────────────────────────────
 function loadState(): AppState {
@@ -68,6 +69,8 @@ export default function Page() {
   const [toastVisible, setToastVisible] = useState(false);
   const [pomBadgeTime, setPomBadgeTime] = useState('25:00');
   const pomIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { signOut } = useClerk();
+  const { user, isSignedIn } = useUser();
   const msgsRef = useRef<HTMLDivElement>(null);
 
   // Hydrate from localStorage on mount
@@ -452,7 +455,7 @@ export default function Page() {
         <div className="dash-hero sg">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--violet2)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>✦ StudyAI</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2, marginBottom: 6 }}>Your intelligent<br />study companion</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.5 }}>Powered by AI flashcards, quizzes, smart notes, and an expert tutor.</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.5 }}>Powered by AI — flashcards, quizzes, smart notes, and an expert tutor.</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             <button className="pbtn" style={{ width: 'auto', padding: '8px 16px', fontSize: 12 }} onClick={() => setTool('chat')}>💬 Start Studying</button>
             <button className="pbtn sec" style={{ width: 'auto', padding: '8px 16px', fontSize: 12 }} onClick={() => setTool('flashcards')}>🃏 Create Flashcards</button>
@@ -747,8 +750,8 @@ export default function Page() {
             {(
               [
                 ['Focus',       'workMins',  [15,20,25,30,45,60]],
-                ['Short Break', 'shortMins', [3,5,8,10,15,20]      ],
-                ['Long Break',  'longMins',  [10,15,20,25,30,35]   ],
+                ['Short Break', 'shortMins', [3,5,8,10,15]      ],
+                ['Long Break',  'longMins',  [10,15,20,25,30]   ],
               ] as [string, 'workMins' | 'shortMins' | 'longMins', number[]][]
             ).map(([lbl, key, opts]) => (
               <div key={key}>
@@ -804,8 +807,8 @@ export default function Page() {
       const streak = st.streak || 1;
       if (streak >= 7) return `🔥 ${streak}-day streak! You're unstoppable.`;
       if (streak >= 3) return `⚡ ${streak} days in a row — great momentum!`;
-      if ((st.totalQuizzes || 0) >= 10) return `🧠 ${st.totalQuizzes} quizzes completed:knowledge is building!`;
-      if (S.notes.length >= 5) return `📝 ${S.notes.length} notes written:your knowledge base is growing!`;
+      if ((st.totalQuizzes || 0) >= 10) return `🧠 ${st.totalQuizzes} quizzes completed — knowledge is building!`;
+      if (S.notes.length >= 5) return `📝 ${S.notes.length} notes written — your knowledge base is growing!`;
       return `🚀 Every expert was once a beginner. Keep studying!`;
     }
 
@@ -911,7 +914,7 @@ export default function Page() {
         {/* Motivational footer */}
         <div style={{ textAlign: 'center', padding: '16px 0 4px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>{getMotivation()}</div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Keep going fam consistency beats intensity.</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>Keep going — consistency beats intensity.</div>
         </div>
       </div>
     );
@@ -985,6 +988,29 @@ export default function Page() {
             <button className="aib red" onClick={() => { if (confirm('Clear ALL data? This cannot be undone.')) { localStorage.removeItem('sai3'); location.reload(); } }}>🗑 Clear</button>
           </div>
         </div>
+        {/* Account section */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', marginBottom: 9, textTransform: 'uppercase', letterSpacing: '.06em' }}>Account</div>
+        {isSignedIn ? (
+          <div className='settings-grid sg'>
+            <div className='set-row'>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {user?.imageUrl && <img src={user.imageUrl} alt='avatar' style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--cardb)', flexShrink: 0 }} />}
+                <div>
+                  <div className='set-label'>{user?.fullName || user?.username || 'User'}</div>
+                  <div className='set-sub'>{user?.primaryEmailAddress?.emailAddress}</div>
+                </div>
+              </div>
+              <button className='aib red' onClick={() => signOut(() => { window.location.href = '/'; })}>Sign Out</button>
+            </div>
+          </div>
+        ) : (
+          <div className='settings-grid sg'>
+            <div className='set-row'>
+              <div><div className='set-label'>Not signed in</div><div className='set-sub'>Sign in to sync your data across devices</div></div>
+              <SignInButton mode='modal'><button className='sign-btn' style={{ fontSize: 11, padding: '6px 13px' }}>Sign In</button></SignInButton>
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 11, color: 'var(--text4)', textAlign: 'center', marginTop: 16 }}>StudyAI v3.0 · Built by Eman</div>
       </div>
     );
@@ -1084,6 +1110,29 @@ export default function Page() {
               <span className="t-ico">⚙️</span>
               <div><div className="t-name">Settings</div><div className="t-desc">Preferences & shortcuts</div></div>
             </button>
+            {/* Mobile-only auth row in sidebar */}
+            <div className="sb-auth-row">
+              {!isSignedIn ? (
+                <SignInButton mode="modal">
+                  <button className="sb-signin-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                      <polyline points="10,17 15,12 10,7"/>
+                      <line x1="15" y1="12" x2="3" y2="12"/>
+                    </svg>
+                    Sign In
+                  </button>
+                </SignInButton>
+              ) : (
+                <div className="sb-user-row">
+                  {user?.imageUrl && <img src={user.imageUrl} alt="avatar" className="sb-avatar" />}
+                  <div className="sb-user-info">
+                    <div className="sb-user-name">{user?.firstName || user?.username || 'User'}</div>
+                    <button className="sb-signout-btn" onClick={() => signOut(() => { window.location.href = '/'; })}>Sign out</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 
