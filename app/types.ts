@@ -15,6 +15,9 @@ export type Chat = {
   title: string;
   messages: Message[];
   created: number;
+  starred?: boolean;
+  archived?: boolean;
+  color?: string;
 };
 
 export type Flashcard = {
@@ -166,6 +169,7 @@ export type AppState = {
   sumResult: string;
   mediaItems: MediaItem[];
   mobileOpen: boolean;
+  sidebarCollapsed: boolean;
   loadingTool: boolean;
   stats: AppStats;
   settings: AppSettings;
@@ -334,6 +338,7 @@ export function getDefaultState(): AppState {
     sumResult: '',
     mediaItems: [],
     mobileOpen: false,
+    sidebarCollapsed: false,
     loadingTool: false,
     stats: {
       totalChats: 0, totalCards: 0, totalQuizzes: 0, totalNotes: 0,

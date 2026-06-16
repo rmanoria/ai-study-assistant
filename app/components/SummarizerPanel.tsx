@@ -10,9 +10,46 @@ interface SummarizerPanelProps {
   onSetTool: (id: string) => void;
 }
 
+// ─── Extract PDF text in the browser using PDF.js (CDN, no npm needed) ────────
+async function extractPdfInBrowser(file: File): Promise<string> {
+  // Dynamically load PDF.js from CDN if not already loaded
+  if (!(window as any).pdfjsLib) {
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load PDF.js'));
+      document.head.appendChild(script);
+    });
+    // Set worker
+    (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  const pdfjsLib = (window as any).pdfjsLib;
+
+  // Read file as ArrayBuffer
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  const textParts: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => item.str)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (pageText) textParts.push(pageText);
+  }
+
+  return textParts.join('\n\n');
+}
+
 export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetTool }: SummarizerPanelProps) {
 
-  // ─── Read file and extract text client-side ─────────────────────────────────
+  // ─── Read file and extract text ─────────────────────────────────────────────
   async function procFile(file: File) {
     if (file.size > 10 * 1024 * 1024) return onToast('File exceeds 10MB limit', 'error');
 
@@ -32,30 +69,24 @@ export default function SummarizerPanel({ S, onUpdate, onSave, onToast, onSetToo
       let extractedText = '';
 
       if (type === 'txt') {
-        // Plain text — read directly
         extractedText = await file.text();
 
       } else if (type === 'image') {
-        // Image — keep as base64 for vision model
         const dataUrl = await readAsDataURL(file);
         extractedText = `[IMAGE:${dataUrl}]`;
 
       } else if (type === 'pdf') {
-        // Send raw base64 to server for proper extraction
-        const dataUrl = await readAsDataURL(file);
-        const base64  = dataUrl.split(',')[1];
+        // ✅ Use browser-side PDF.js — reliable for all PDF types
+        onToast('Parsing PDF…');
+        extractedText = await extractPdfInBrowser(file);
 
-        const res = await fetch('/api/tools', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tool: 'extract_pdf', payload: { base64 } }),
-        });
-        const d = await res.json();
-        if (d.error) throw new Error(d.error);
-        extractedText = d.text || '';
+        if (!extractedText || extractedText.trim().length < 30) {
+          onToast('Could not extract text — PDF may be scanned. Try pasting the text directly.', 'error');
+          onUpdate({ sumFileName: '', sumFileType: '', sumFileText: '' });
+          return;
+        }
 
       } else if (type === 'docx' || type === 'doc') {
-        // Send raw base64 to server for extraction
         const dataUrl = await readAsDataURL(file);
         const base64  = dataUrl.split(',')[1];
 

@@ -11,6 +11,7 @@ import NotesPanel from './components/NotesPanel';
 import SummarizerPanel from './components/SummarizerPanel';
 import PlannerPanel from './components/PlannerPanel';
 import MediaLibrary from './components/MediaLibrary';
+import ChatList from './components/ChatList';
 
 import {
   AppState, ToolId, Chat, Note, Message, TOOLS, MODES, QPS, SHORTCUTS,
@@ -32,6 +33,7 @@ function loadState(): AppState {
         loadingChat: false, loadingTool: false,
         noteLoadAction: null, mobileOpen: false,
         attachFile: null, attachPreview: null,
+        sidebarCollapsed: p.sidebarCollapsed || false,
         stats: p.stats || def.stats,
         settings: p.settings || def.settings,
         pom: p.pom || def.pom,
@@ -178,6 +180,30 @@ export default function Page() {
     });
   }
 
+  function renameChat(id: string, title: string) {
+    setS(prev => ({ ...prev, chats: prev.chats.map(c => c.id === id ? { ...c, title } : c) }));
+  }
+
+  function starChat(id: string) {
+    setS(prev => ({ ...prev, chats: prev.chats.map(c => c.id === id ? { ...c, starred: !c.starred } : c) }));
+  }
+
+  function archiveChat(id: string) {
+    setS(prev => ({ ...prev, chats: prev.chats.map(c => c.id === id ? { ...c, archived: !c.archived } : c) }));
+  }
+
+  function duplicateChat(id: string) {
+    const src = S.chats.find(c => c.id === id);
+    if (!src) return;
+    const dup = { ...src, id: uid(), title: src.title + ' (copy)', created: Date.now() };
+    setS(prev => ({ ...prev, chats: [dup, ...prev.chats] }));
+    toast('Chat duplicated', 'success');
+  }
+
+  function colorChat(id: string, color: string) {
+    setS(prev => ({ ...prev, chats: prev.chats.map(c => c.id === id ? { ...c, color } : c) }));
+  }
+
   function bumpActivity() {
     setS(prev => {
       const act = prev.stats.activity.length === 14 ? prev.stats.activity : Array(14).fill(0);
@@ -203,13 +229,25 @@ export default function Page() {
     const chat = S.chats.find(c => c.id === S.activeChatId);
     if (!chat) return;
 
-    const msgContent = txt || (S.attachFile ? `[Attached: ${S.attachFile.name}]` : '');
-    const msg: Message = { role: 'user', content: msgContent, ts: Date.now() };
+    // Build API content: user text + file context if attached
+    const fileCtx = S.attachFile
+      ? `\n[File attached: "${S.attachFile.name}" — answer the user's question about this file based on its name/context]`
+      : '';
+    const msgContent = (txt + fileCtx) || (S.attachFile ? `[File attached: "${S.attachFile.name}"] Please review and summarise this file.` : '');
+    const msg: Message = { role: 'user', content: txt || '', ts: Date.now() };
     if (S.attachPreview) msg.imgData = S.attachPreview;
+    if (S.attachFile) {
+      msg.fileName = S.attachFile.name;
+      const n = S.attachFile.name.toLowerCase();
+      msg.fileType = S.attachFile.type.startsWith('image/') ? 'image'
+        : n.endsWith('.pdf') ? 'pdf'
+        : (n.endsWith('.docx') || n.endsWith('.doc')) ? 'doc'
+        : 'txt';
+    }
 
     const updatedChat: Chat = {
       ...chat,
-      title: chat.title === 'New Chat' && txt ? txt.slice(0, 30) + (txt.length > 30 ? '…' : '') : chat.title,
+      title: chat.title === 'New Chat' ? (txt ? txt.slice(0, 30) + (txt.length > 30 ? '…' : '') : S.attachFile ? S.attachFile.name.slice(0, 30) : chat.title) : chat.title,
       messages: [...chat.messages, msg],
     };
 
@@ -254,14 +292,26 @@ export default function Page() {
 
   function handleAtt(inp: HTMLInputElement) {
     const f = inp.files?.[0]; if (!f) return;
-    setS(prev => ({ ...prev, attachFile: f }));
-    if (f.type.startsWith('image/')) {
-      const r = new FileReader();
-      r.onload = e => setS(prev => ({ ...prev, attachPreview: e.target?.result as string }));
-      r.readAsDataURL(f);
-    }
+    if (f.size > 15 * 1024 * 1024) { toast('File exceeds 15MB', 'error'); return; }
+    const r = new FileReader();
+    r.onload = e => {
+      const dataUrl = e.target?.result as string;
+      const isImage = f.type.startsWith('image/');
+      const n = f.name.toLowerCase();
+      const type: 'image' | 'pdf' | 'doc' | 'txt' =
+        isImage ? 'image' : n.endsWith('.pdf') ? 'pdf' : (n.endsWith('.docx') || n.endsWith('.doc')) ? 'doc' : 'txt';
+      // Auto-save to media library
+      const mediaItem = { id: uid(), name: f.name, type, size: f.size, dataUrl, addedAt: new Date().toLocaleDateString() };
+      setS(prev => ({
+        ...prev,
+        attachFile: f,
+        attachPreview: isImage ? dataUrl : null,
+        mediaItems: [mediaItem, ...(prev.mediaItems || [])],
+      }));
+    };
+    r.readAsDataURL(f);
     inp.value = '';
-    toast(`📎 ${f.name} attached`);
+    toast(`📎 ${f.name} attached & saved to library`);
   }
 
   function msgToFC(i: number) {
@@ -518,11 +568,21 @@ export default function Page() {
             </div>
           </div>
 
-          {S.attachPreview && (
+          {S.attachFile && (
             <div className="attach-preview">
-              <img src={S.attachPreview} alt="attachment" />
+              {S.attachPreview
+                ? <img src={S.attachPreview} alt="attachment" />
+                : <span style={{ fontSize: 20 }}>
+                    {S.attachFile.name.toLowerCase().endsWith('.pdf') ? '📄'
+                      : (S.attachFile.name.toLowerCase().endsWith('.doc') || S.attachFile.name.toLowerCase().endsWith('.docx')) ? '📝'
+                      : '📃'}
+                  </span>
+              }
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {S.attachFile?.name || 'File attached'}
+                {S.attachFile.name}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text3)', flexShrink: 0 }}>
+                {(S.attachFile.size / 1024).toFixed(0)}KB
               </span>
               <button onClick={() => update({ attachFile: null, attachPreview: null })}>✕</button>
             </div>
@@ -941,7 +1001,15 @@ export default function Page() {
 
       <Navbar
         S={S}
-        onToggleSidebar={() => update({ mobileOpen: !S.mobileOpen })}
+        onToggleSidebar={() => {
+          // On mobile: toggle drawer open/close
+          // On desktop: toggle collapsed/expanded
+          if (window.innerWidth <= 640) {
+            update({ mobileOpen: !S.mobileOpen });
+          } else {
+            update({ sidebarCollapsed: !S.sidebarCollapsed, mobileOpen: false });
+          }
+        }}
         onToggleTheme={() => update({ darkMode: !S.darkMode })}
         onSetTool={setTool}
         onSearch={() => setTool('chat')}
@@ -953,7 +1021,7 @@ export default function Page() {
         <div className={`overlay${S.mobileOpen ? ' show' : ''}`} onClick={() => update({ mobileOpen: false })} />
 
         {/* Sidebar */}
-        <aside className={`sidebar${S.mobileOpen ? ' open' : ''}`}>
+        <aside className={`sidebar${S.mobileOpen ? ' open' : ''}${S.sidebarCollapsed ? ' collapsed' : ''}`}>
           <div className="sb-sec">
             <div className="sb-label">Study Tools</div>
             {TOOLS.map(t => {
@@ -974,11 +1042,11 @@ export default function Page() {
           </div>
 
           <div className="sb-sec">
-            <button className="new-chat" onClick={addNewChat}>
+            <button className="new-chat" onClick={addNewChat} title="New Chat">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              New Chat
+              <span className="new-chat-label">New Chat</span>
             </button>
           </div>
 
@@ -993,23 +1061,23 @@ export default function Page() {
             </div>
           )}
 
+          <div className="sb-history">
           <div className="sb-label" style={{ padding: '7px 14px 2px' }}>History</div>
           <div className="chat-list">
-            {S.chats.slice(0, 20).map(c => (
-              <div key={c.id} className={`ci${c.id === S.activeChatId && S.tool === 'chat' ? ' on' : ''}`} onClick={() => selChat(c.id)}>
-                <svg className="ci-ico" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span className="ci-title">{c.title}</span>
-                <button className="ci-del" onClick={e => { e.stopPropagation(); delChat(c.id); }} title="Delete">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3,6 5,6 21,6"/>
-                    <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6"/>
-                  </svg>
-                </button>
-              </div>
-            ))}
+            <ChatList
+              chats={S.chats}
+              activeChatId={S.activeChatId}
+              activeTool={S.tool}
+              onSelect={selChat}
+              onRename={renameChat}
+              onStar={starChat}
+              onArchive={archiveChat}
+              onDuplicate={duplicateChat}
+              onDelete={delChat}
+              onColor={colorChat}
+            />
           </div>
+          </div>{/* /sb-history */}
 
           <div className="sb-sec" style={{ marginTop: 'auto' }}>
             <button className="tool-btn" onClick={() => setTool('settings')}>

@@ -20,13 +20,30 @@ export default function Navbar({
     ? (S.chats.find(c => c.id === S.activeChatId)?.title || 'Chat')
     : (tool?.n || '');
 
+  const isCollapsed = S.sidebarCollapsed;
+
   return (
     <nav className="navbar">
-      <button className="nb" onClick={onToggleSidebar} aria-label="Toggle sidebar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
+      {/* Hamburger / collapse toggle */}
+      <button
+        className={`nb sidebar-toggle${isCollapsed ? ' collapsed' : ''}`}
+        onClick={onToggleSidebar}
+        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {/* Animate between hamburger and arrow */}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transition: 'transform .22s' }}>
+          {isCollapsed ? (
+            /* Right-pointing chevron = expand */
+            <polyline points="9,18 15,12 9,6" />
+          ) : (
+            /* Hamburger = collapse */
+            <>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
+            </>
+          )}
         </svg>
       </button>
 
